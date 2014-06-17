@@ -34,22 +34,13 @@ import cascading.tuple.Fields
 import cascading.tuple.Tuple
 import cascading.tuple.TupleEntry
 import com.google.common.base.Objects
-import com.twitter.scalding.AccessMode
-import com.twitter.scalding.HadoopTest
-import com.twitter.scalding.Hdfs
-import com.twitter.scalding.Local
-import com.twitter.scalding.Mode
-import com.twitter.scalding.Read
-import com.twitter.scalding.Source
-import com.twitter.scalding.Test
-import com.twitter.scalding.Write
+import com.twitter.scalding._
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.hadoop.mapred.JobConf
 
 import org.kiji.annotations.ApiAudience
 import org.kiji.annotations.ApiStability
-import org.kiji.express.flow.framework.DirectKijiSinkContext
 import org.kiji.express.flow.framework.KijiScheme
 import org.kiji.express.flow.framework.KijiTap
 import org.kiji.express.flow.framework.LocalKijiScheme
@@ -64,6 +55,12 @@ import org.kiji.schema.KijiTable
 import org.kiji.schema.KijiTableReader.KijiScannerOptions
 import org.kiji.schema.KijiTableWriter
 import org.kiji.schema.KijiURI
+import com.twitter.scalding.Test
+import scala.Some
+import org.kiji.express.flow.framework.DirectKijiSinkContext
+import com.twitter.scalding.HadoopTest
+import com.twitter.scalding.Hdfs
+import com.twitter.scalding.Local
 
 /**
  * A read or write view of a Kiji table.
@@ -99,7 +96,7 @@ import org.kiji.schema.KijiURI
  */
 @ApiAudience.Framework
 @ApiStability.Stable
-final class KijiSource private[express] (
+sealed class KijiSource private[express] (
     val tableAddress: String,
     val timeRange: TimeRangeSpec,
     val timestampField: Option[Symbol],
@@ -254,7 +251,7 @@ final class KijiSource private[express] (
  * tests.
  */
 @ApiAudience.Framework
-@ApiStability.Stable
+@ApiStability.Evolving
 private[express] object KijiSource {
 
   /**
@@ -533,4 +530,38 @@ private[express] object KijiSource {
           rowRangeSpec,
           rowFilterSpec) {
   }
+}
+
+
+/**
+ * KijiTypedSource is a TypeSafe representation of [[KijiSource]]. This class extends [[Mappable]]
+ * to allow compile time type checking in accordance with scalding's type safe API.
+ *
+ * @param tableAddress is a Kiji URI addressing the Kiji table to read or write to.
+ * @param timeRange that cells read must belong to. Ignored when the source is used to write.
+ * @param timestampField is the name of a tuple field that will contain cell timestamp when the
+ *                       source is used fo  r writing. Specify `None` to write all cells at
+ *                       the current time.
+ * @param inputColumns is a one-to-one mapping from field names to Kiji columns. The columns in the
+ *                     map will be read into their associated tuple fields.
+ * @param outputColumns is a one-to-one mapping from field names to Kiji columns. Values from the
+ *                      tuple fields will be written to their associated column.
+ * @param rowRangeSpec is the specification for which interval of rows to scan.
+ * @param rowFilterSpec is the specification for which row filter to apply.
+ * @tparam T is the type of value from the source.
+ */
+sealed class KijiTypedSource[+T](
+                                  override val tableAddress: String,
+                                  override val timeRange: TimeRangeSpec,
+                                  override val timestampField: Option[Symbol],
+                                  override val inputColumns: Map[Symbol, ColumnInputSpec] = Map(),
+                                  override val outputColumns: Map[Symbol, ColumnOutputSpec] = Map(),
+                                  override val rowRangeSpec: RowRangeSpec = RowRangeSpec.All,
+                                  override val rowFilterSpec: RowFilterSpec = RowFilterSpec.NoFilter
+                                  )
+  extends KijiSource(tableAddress, timeRange, timestampField, inputColumns, outputColumns,
+    rowRangeSpec, rowFilterSpec) with Mappable[T] {
+
+  override def converter[U >: T] :TupleConverter[U] = new KijiTypedTupleConverter[U]
+
 }
