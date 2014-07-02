@@ -20,11 +20,11 @@
 package org.kiji.express.flow
 
 import java.io.Serializable
-import scala.collection.JavaConverters.collectionAsScalaIterableConverter
-import scala.collection.JavaConverters.mapAsJavaMapConverter
-import scala.collection.JavaConverters.mapAsScalaMapConverter
-
 import java.util.Properties
+
+import scala.collection.JavaConverters.asScalaIteratorConverter
+import scala.collection.JavaConverters.collectionAsScalaIterableConverter
+import scala.collection.JavaConverters.mapAsScalaMapConverter
 
 import cascading.flow.Flow
 import cascading.flow.FlowListener
@@ -32,11 +32,14 @@ import cascading.flow.hadoop.util.HadoopUtil
 import cascading.pipe.Checkpoint
 import cascading.pipe.Pipe
 import cascading.pipe.assembly.AggregateBy
+import cascading.stats.FlowStepStats
+import cascading.stats.hadoop.HadoopStepStats
+import cascading.stats.local.LocalStepStats
 import cascading.tap.Tap
 import cascading.tuple.collect.SpillableProps
 import com.google.common.base.Preconditions
 import com.twitter.chill.config.ConfiguredInstantiator
-import com.twitter.chill.config.ScalaMapConfig
+import com.twitter.chill.config.ScalaAnyRefMapConfig
 import com.twitter.scalding.Args
 import com.twitter.scalding.HadoopTest
 import com.twitter.scalding.Hdfs
@@ -46,12 +49,15 @@ import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.hadoop.hbase.security.User
 import org.apache.hadoop.hbase.security.token.TokenUtil
 import org.apache.hadoop.mapred.JobConf
+import org.apache.hadoop.mapred.RunningJob
+import org.apache.hadoop.mapreduce.Counter
 import org.apache.hadoop.security.UserGroupInformation
 
 import org.kiji.annotations.ApiAudience
 import org.kiji.annotations.ApiStability
 import org.kiji.annotations.Inheritance
 import org.kiji.express.flow.KijiJob.CounterListener
+import org.kiji.express.flow.framework.ExpressJobHistoryKijiTable
 import org.kiji.express.flow.framework.KijiTap
 import org.kiji.express.flow.framework.LocalKijiTap
 import org.kiji.express.flow.framework.hfile.HFileFlowStepStrategy
@@ -59,7 +65,7 @@ import org.kiji.express.flow.framework.hfile.HFileKijiTap
 import org.kiji.express.flow.framework.serialization.KijiKryoInstantiator
 import org.kiji.express.flow.util.AvroTupleConversions
 import org.kiji.express.flow.util.PipeConversions
-import org.kiji.mapreduce.framework.JobHistoryKijiTable
+import org.kiji.express.flow.util.ResourcesShutdown
 import org.kiji.schema.Kiji
 import org.kiji.schema.KijiURI
 
@@ -78,8 +84,12 @@ class KijiJob(args: Args)
     extends Job(args)
     with PipeConversions
     with AvroTupleConversions {
-  /** FlowListener for collecting counters from this Job. */
+  /** FlowListener for collecting flowCounters from this Job. */
   private val counterListener: CounterListener = new CounterListener
+
+  // We have to reference ResourcesShutdown from here, or else the class never gets loaded into
+  // the jvm.
+  ResourcesShutdown.initialize()
 
   override def buildFlow: Flow[_] = {
     val taps: List[Tap[_, _, _]] = (
@@ -141,7 +151,6 @@ class KijiJob(args: Args)
     if (!hfileSinks.isEmpty) {
       val tailsMap = flowDef.getTails.asScala.map((p: Pipe) => p.getName -> p).toMap
       val flow: Flow[JobConf] = super.buildFlow.asInstanceOf[Flow[JobConf]]
-
       for {
         flowStep <- flow.getFlowSteps.asScala
         sink <- flowStep.getSinks.asScala
@@ -176,7 +185,7 @@ class KijiJob(args: Args)
         AggregateBy.AGGREGATE_BY_THRESHOLD -> defaultSpillThreshold.toString
     )
     // Set up the keys for chill
-    val chillConf = ScalaMapConfig(lowPriorityDefaults)
+    val chillConf = ScalaAnyRefMapConfig(lowPriorityDefaults)
     ConfiguredInstantiator.setReflect(chillConf, classOf[KijiKryoInstantiator])
 
     // Append all the new keys.
@@ -186,12 +195,21 @@ class KijiJob(args: Args)
   }
 
   /**
-   * Get the counters from this job. Will be empty until the job completes. If `listeners` is
-   * overridden without concatenating `super.listeners`, counters will not be recorded.
+   * Get the flowCounters from this job. Will be empty until the job completes. If `listeners` is
+   * overridden without concatenating `super.listeners`, flowCounters will not be recorded.
    *
-   * @return The set of counters from this job. (CounterGroup, CounterName, Count).
+   * @return The set of flowCounters from this job. (CounterGroup, CounterName, Count).
    */
-  private[express] def counters: Set[(String, String, Long)] = counterListener.counters
+  private[express] def flowCounters: Set[(String, String, Long)] = counterListener.flowCounters
+
+  /**
+   * Get the counters for the different flowSteps for this job.
+   * Will be empty until the job completes.
+   *
+   * @return The set of flowCounters from this job. (CounterGroup, CounterName, Count).
+   */
+  private[express] def flowStepCounters: Iterable[Set[(String, String, Long)]] =
+    counterListener.flowStepCounters
 
   /**
    * Override this to add custom listeners.
@@ -228,12 +246,21 @@ class KijiJob(args: Args)
       case _ => None
     }
 
-    val counterMap: Map[java.lang.String, java.lang.Long] = counters.map {
+    val flowCounterMap: Map[String, Long] = flowCounters.map {
       triple: (String, String, Long) => {
         val (group, counter, count) = triple
-        ("%s:%s".format(group, counter), count: java.lang.Long)
+        ("%s:%s".format(group, counter), count)
       }
     }.toMap
+
+    val flowStepCountersIterable: Iterable[Map[String, Long]] = flowStepCounters.map {
+      flowStepSet: Set[(String, String, Long)] => flowStepSet.map {
+        triple: (String, String, Long) => {
+          val (group, counter, count) = triple
+          ("%s:%s".format(group, counter), count)
+        }
+      }.toMap
+    }.toIterable
 
     val extendedInfo: Map[String, String] = args.list(KijiJob.extendedInfoArgsKey).map {
       s: String => {
@@ -261,10 +288,11 @@ class KijiJob(args: Args)
             startTime,
             endTime,
             jobSuccess,
-            conf.getOrElse(null),
+            conf,
             kiji,
-            counterMap,
-            extendedInfo
+            flowCounterMap,
+            extendedInfo,
+            flowStepCountersIterable
         )
       } finally {
         kiji.release()
@@ -278,8 +306,8 @@ class KijiJob(args: Args)
    * @param startTime in milliseconds since the epoch at which the job started.
    * @param endTime in milliseconds since the epoch at which the job ended.
    * @param jobSuccess whether the job completed successfully.
-   * @param conf of the job, or null if the job did not have a Configuration (a Local mode job for
-   *     instance).
+   * @param conf is the job configuration wrapped in [[Option]] object. Contains None if no
+   *             configuration is passed.
    * @param kiji instance into which to record the job history.
    * @param counterMap to record in the job history.
    * @param extendedInfo to record in the job history.
@@ -288,25 +316,27 @@ class KijiJob(args: Args)
       startTime: Long,
       endTime: Long,
       jobSuccess: Boolean,
-      conf: Configuration,
+      conf: Option[Configuration],
       kiji: Kiji,
-      counterMap: Map[String, java.lang.Long],
-      extendedInfo: Map[String, String]
+      counterMap: Map[String, Long],
+      extendedInfo: Map[String, String],
+      flowStepCountersIterable :Iterable[Map[String, Long]]
   ) {
-    val jobHistoryTable: JobHistoryKijiTable = JobHistoryKijiTable.open(kiji)
+    val expressJobHistoryTable: ExpressJobHistoryKijiTable = ExpressJobHistoryKijiTable(kiji)
     try {
-      jobHistoryTable.recordJob(
+      expressJobHistoryTable.recordJob(
           uniqueId.get,
           name,
           startTime,
           endTime,
           jobSuccess,
           conf,
-          counterMap.asJava,
-          extendedInfo.asJava
+          counterMap,
+          extendedInfo,
+          flowStepCountersIterable
       )
     } finally {
-      jobHistoryTable.close()
+      expressJobHistoryTable.close()
     }
   }
 
@@ -328,21 +358,65 @@ object KijiJob {
   val extendedInfoArgsKey: String = "extendedInfo"
 
   private[express] class CounterListener extends FlowListener with Serializable {
-    private var _counters: Set[(String, String, Long)] = Set()
-    def counters: Set[(String, String, Long)] = _counters
 
-    override def onStopping(flow: Flow[_]): Unit = { }
+    private var _flowCounters: Set[(String, String, Long)] = Set()
 
-    override def onStarting(flow: Flow[_]): Unit = { }
+    private var _flowStepCounters: Iterable[Set[(String, String, Long)]] = Iterable(Set())
+
+    def flowCounters: Set[(String, String, Long)] = _flowCounters
+
+    def flowStepCounters : Iterable[Set[(String, String, Long)]] =_flowStepCounters
+
+    override def onStopping(flow: Flow[_]): Unit = {}
+
+    override def onStarting(flow: Flow[_]): Unit = {}
 
     override def onThrowable(flow: Flow[_], throwable: Throwable): Boolean = false
 
     override def onCompleted(flow: Flow[_]): Unit = {
-      _counters = flow.getFlowStats.getCounterGroups.asScala.toSet.flatMap {
+
+      _flowCounters = flow.getFlowStats.getCounterGroups.asScala.toSet.flatMap {
         group: String => flow.getFlowStats.getCountersFor(group).asScala.map {
-          counter: String => (group, counter, flow.getFlowStats.getCounterValue(group, counter))
+          counter: String =>
+            (group, counter, flow.getFlowStats.getCounterValue(group, counter))
         }
+      }
+
+      _flowStepCounters = flow.getFlowStats.getFlowStepStats.asScala.map {
+        flowStepStats: FlowStepStats =>
+          flowStepStats match {
+            //In case this is a hadoop job, pull stats from cascading.
+            case hadoopStepStats: HadoopStepStats =>
+              val jobOption: Option[RunningJob] = Option(hadoopStepStats.getRunningJob)
+              jobOption match {
+                case Some(runningJob) => runningJob
+                    .getCounters
+                    .getGroupNames
+                    .asScala
+                    .toSet
+                    .flatMap { group: String =>
+                      runningJob
+                          .getCounters
+                          .getGroup(group)
+                          .iterator
+                          .asScala
+                          .map { counter: Counter =>
+                            (group, counter.getName, counter.getValue)
+                          }
+                    }
+                case None => Set[(String, String, Long)]()
+              }
+            //In case this is a local job, only pull available stats.
+            case localStepStats: LocalStepStats =>
+              localStepStats.getCounterGroups.asScala.toSet.flatMap {
+                group: String => localStepStats.getCountersFor(group).asScala.map {
+                  counter: String =>
+                    (group, counter, localStepStats.getCounterValue(group, counter))
+                }
+              }
+          }
       }
     }
   }
 }
+
