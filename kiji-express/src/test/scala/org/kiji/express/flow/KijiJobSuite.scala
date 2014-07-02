@@ -310,3 +310,4 @@ class UnpackSpecificRecordJob(args: Args) extends KijiJob(args) {
       .unpackTo[SimpleRecord]('record -> ('l, 's, 'o))
       .write(Tsv(args("output")))
 }
+

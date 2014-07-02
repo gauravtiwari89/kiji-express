@@ -72,6 +72,21 @@ object KijiInput {
   def builder(other: Builder): Builder = Builder(other)
 
   /**
+   * Create an empty KijiInput.TypedBuilder.
+   * @tparam T is the type of value requested from the scalding resource.
+   * @return an empty KijiInput.TypedBuilder
+   */
+  def typedBuilder[T]: TypedBuilder[T] = TypedBuilder[T]()
+
+  /**
+   * Create a new KijiInput.TypedBuilder as a copy of the given Builder.
+   *
+   * @param other Builder to copy.
+   * @return a new KijiInput.TypedBuilder as a copy of the given Builder.
+   */
+  def typedBuilder[T](other:TypedBuilder[T]): TypedBuilder[T] = TypedBuilder[T](other)
+
+  /**
    * Builder for [[org.kiji.express.flow.KijiSource]]s to be used as inputs.
    *
    * @param mTableURI string of the table from which to read.
@@ -178,7 +193,7 @@ object KijiInput {
      * @return this builder.
      */
     def withColumns(columns: Map[String, Symbol]): Builder =
-        withColumnSpecs(columns.map { Builder.columnToSpec })
+        withColumnSpecs(columns.map { columnToSpec })
 
     /**
      * Configure the KijiSource to read values from the given columns into the corresponding fields.
@@ -197,7 +212,7 @@ object KijiInput {
      * @return this builder.
      */
     def addColumns(columns: Map[String, Symbol]): Builder =
-        addColumnSpecs(columns.map { Builder.columnToSpec })
+        addColumnSpecs(columns.map { columnToSpec })
 
     /**
      * Configure the KijiSource to read values from the given columns into the corresponding fields.
@@ -309,6 +324,238 @@ object KijiInput {
     }
   }
 
+
+  @ApiAudience.Public
+  @ApiStability.Evolving
+  final class TypedBuilder[+T] private(
+      private[this] var mTableURI: Option[String],
+      private[this] var mTimeRange: Option[TimeRangeSpec],
+      private[this] var mColumnSpecs: Option[List[_ <: ColumnInputSpec]],
+      private[this] var mRowRangeSpec: Option[RowRangeSpec],
+      private[this] var mRowFilterSpec: Option[RowFilterSpec]
+  ) {
+
+    /** protects read and write access to private var fields. */
+    private val monitor = new AnyRef
+
+    /**
+     * Get the Kiji URI of the table from which to read from this TypedBuilder.
+     *
+     * @return the Kiji URI of the table from which to read from this TypedBuilder.
+     */
+    def tableURI: Option[String] = monitor.synchronized(mTableURI)
+
+    /**
+     * Get the input time range specification from this TypedBuilder.
+     *
+     * @return the input time range specification from this TypedBuilder.
+     */
+    def timeRange: Option[TimeRangeSpec] = monitor.synchronized(mTimeRange)
+
+    /**
+     * Get the input specifications from this TypedBuilder.
+     *
+     * @return the input specifications from this TypedBuilder.
+     */
+    def columnSpecs: Option[List[_ <: ColumnInputSpec]] = monitor.synchronized(mColumnSpecs)
+
+    /**
+     * Get the input row range specification from this TypedBuilder.
+     *
+     * @return the input row range specification from this TypedBuilder.
+     */
+    def rowRangeSpec: Option[RowRangeSpec] = monitor.synchronized(mRowRangeSpec)
+
+    /**
+     * Get the input row filter specification from this TypedBuilder.
+     *
+     * @return the input row filter specification from this TypedBuilder.
+     */
+    def rowFilterSpec: Option[RowFilterSpec] = monitor.synchronized(mRowFilterSpec)
+
+    /**
+     * Configure the KijiTypedSource to read values from the table with the given Kiji URI.
+     *
+     * @param tableURI of the table from which to read.
+     * @return this TypedBuilder.
+     */
+    def withTableURI(tableURI: String): TypedBuilder[T] = monitor.synchronized {
+      require(tableURI != null, "Table URI may not be null.")
+      require(mTableURI.isEmpty, "Table URI already set to: " + mTableURI.get)
+      mTableURI = Some(tableURI)
+      this
+    }
+
+    /**
+     * Configure the KijiSource to read values from the table with the given Kiji URI.
+     *
+     * @param tableURI of the table from which to read.
+     * @return this TypedBuilder.
+     */
+    def withTableURI(tableURI: KijiURI): TypedBuilder[T] = withTableURI(tableURI.toString)
+
+    /**
+     * Configure the KijiTypedSource to read values from the given range of input times.
+     *
+     * @param timeRangeSpec specification of times from which to read.
+     * @return this TypedBuilder.
+     */
+    def withTimeRangeSpec(timeRangeSpec: TimeRangeSpec): TypedBuilder[T] = monitor.synchronized {
+      require(timeRangeSpec != null, "Time range may not be null.")
+      require(mTimeRange.isEmpty, "Time range already set to: " + mTimeRange.get)
+      mTimeRange = Some(timeRangeSpec)
+      this
+    }
+
+    /**
+     * Configure the KijiTypedSource to read values from the given columns into the corresponding
+     * fields.
+     *
+     * @param columns mapping from column inputs to fields which will hold the values from those
+     *     columns.
+     * @return this TypedBuilder.
+     */
+    def withColumns(columns: (String)*): TypedBuilder[T] = withColumns(columns.toList)
+
+    /**
+     * Configure the KijiTypedSource to read values from the given columns into the corresponding
+     * fields.
+     *
+     * @param columns mapping from column inputs to fields which will hold the values from those
+     *     columns.
+     * @return this TypedBuilder.
+     */
+    def withColumns(columns: List[String]): TypedBuilder[T] =
+      withColumnSpecs(columns.map { TypedBuilder.columnToSpec })
+
+    /**
+     * Configure the KijiTypedSource to read values from the given columns into the corresponding
+     * fields.
+     *
+     * @param columns mapping from column inputs to fields which will hold the values from those
+     *     columns.
+     * @return this TypedBuilder.
+     */
+    def addColumns(columns: String *): TypedBuilder[T] = addColumns(columns.toList)
+
+    /**
+     * Configure the KijiTypedSource to read values from the given columns into the corresponding
+     * fields.
+     *
+     * @param columns mapping from column inputs to fields which will hold the values from those
+     *     columns.
+     * @return this TypedBuilder.
+     */
+    def addColumns(columns: List[String]): TypedBuilder[T] =
+      addColumnSpecs(columns.map { TypedBuilder.columnToSpec })
+
+    /**
+     * Configure the KijiTypedSource to read values from the given columns into the corresponding
+     * fields.
+     *
+     * @param columnSpecs mapping from column inputs to fields which will hold the values from those
+     *     columns.
+     * @return this TypedBuilder.
+     */
+    def withColumnSpecs(columnSpecs: (ColumnInputSpec)*): TypedBuilder[T] =
+      withColumnSpecs(columnSpecs.toList)
+
+    /**
+     * Configure the KijiTypedSource to read values from the given columns into the corresponding
+     * fields.
+     *
+     * @param columnSpecs mapping from column inputs to fields which will hold the values from those
+     *     columns.
+     * @return this TypedBuilder.
+     */
+    def addColumnSpecs(columnSpecs: (ColumnInputSpec)*): TypedBuilder[T] =
+      addColumnSpecs(columnSpecs.toList)
+
+    /**
+     * Configure the KijiTypedSource to read values from the given columns into the corresponding
+     * fields.
+     *
+     * @param columnSpecs mapping from column inputs to fields which will hold the values from those
+     *     columns.
+     * @return this TypedBuilder.
+     */
+    def withColumnSpecs(columnSpecs: List[ColumnInputSpec]): TypedBuilder[T] = {
+      require(columnSpecs != null, "Column input specs may not be null.")
+      require(columnSpecs.size == columnSpecs.toSet.size,
+        "Column input specs may not include duplicate Fields. found: " + columnSpecs)
+      monitor.synchronized {
+        require(mColumnSpecs.isEmpty, "Column input specs already set to: " + mColumnSpecs.get)
+        mColumnSpecs = Some(columnSpecs)
+      }
+      this
+    }
+
+    /**
+     * Configure the KijiTypedSource to read values from the given columns into the corresponding
+     * fields.
+     *
+     * @param columnSpecs mapping from column inputs to fields which will hold the values from those
+     *     columns.
+     * @return this TypedBuilder.
+     */
+    def addColumnSpecs(columnSpecs: List[_ <: ColumnInputSpec]): TypedBuilder[T] = {
+      require(columnSpecs != null, "Column input specs may not be null.")
+      require(columnSpecs.size == columnSpecs.toSet.size,
+        "Column input specs may not include duplicate Fields. found: " + columnSpecs)
+      monitor.synchronized {
+        mColumnSpecs match {
+          case Some(cs) =>  mColumnSpecs = Some(cs ++ columnSpecs)
+          case None => mColumnSpecs = Some(columnSpecs)
+        }
+      }
+      this
+    }
+
+    /**
+     * Configure the KijiTypedSource to traverse rows within the requested row range specification.
+     *
+     * @param rowRangeSpec requested range for rows.
+     * @return this TypedBuilder
+     */
+    def withRowRangeSpec(rowRangeSpec: RowRangeSpec): TypedBuilder[T] = monitor.synchronized {
+      require(rowRangeSpec != null, "Row range spec may not be null.")
+      require(mRowRangeSpec.isEmpty, "Row range spec already set to: " + mRowRangeSpec.get)
+      mRowRangeSpec = Some(rowRangeSpec)
+      this
+    }
+
+    /**
+     * Configure the KijiSource to traverse rows with the requested row filter specification.
+     *
+     * @param rowFilterSpec requested row filter.
+     * @return this builder.
+     */
+    def withRowFilterSpec(rowFilterSpec: RowFilterSpec): TypedBuilder[T] = monitor.synchronized {
+      require(rowFilterSpec != null, "Row filter spec may not be null.")
+      require(mRowFilterSpec.isEmpty, "Row filter spec already set to: " + mRowFilterSpec.get)
+      mRowFilterSpec = Some(rowFilterSpec)
+      this
+    }
+
+    /**
+     * Build a new KijiTypedSource configured for input from the values stored in this TypedBuilder.
+     *
+     * @throws IllegalStateException if the builder is not in a valid state to be built.
+     * @return a new KijiTypedSource configured for input from the values stored in this
+     *         TypedBuilder.
+     */
+    def build: KijiTypedSource[T] = monitor.synchronized {
+      KijiInput.typedKijiSource(
+        tableURI.getOrElse(throw new IllegalStateException("Table URI must be specified.")),
+        timeRange.getOrElse(DEFAULT_TIME_RANGE),
+        columnSpecs.getOrElse(
+          throw new IllegalStateException("Column input specs must be specified.")),
+        rowRangeSpec.getOrElse(RowRangeSpec.All),
+        rowFilterSpec.getOrElse(RowFilterSpec.NoFilter))
+    }
+  }
+
+
   /**
    * Companion object providing utility methods and factory methods for creating new instances of
    * [[org.kiji.express.flow.KijiInput.Builder]].
@@ -339,22 +586,48 @@ object KijiInput {
           other.rowRangeSpec,
           other.rowFilterSpec)
     }
+  }
+
+
+  /**
+   * Companion object providing utility methods and factory methods for creating new instances of
+   * [[org.kiji.express.flow.KijiInput.TypedBuilder]].
+   */
+  object TypedBuilder {
 
     /**
-     * Converts a column -> Field mapping to a ColumnInputSpec -> Field mapping.
+     * Create a new empty TypedBuilder.
      *
-     * @param pair column to Field binding.
-     * @return ColumnInputSpec to Field binding.
+     * @return a new empty TypedBuilder.
      */
-    private def columnToSpec(pair: (String, Symbol)): (_ <: ColumnInputSpec, Symbol) = {
-      val (column, field) = pair
+    def apply[T](): TypedBuilder[T] = new TypedBuilder[T](None, None, None, None, None)
+
+    /**
+     * Create a new TypedBuilder as a copy of the given Builder.
+     *
+     * @param other TypedBuilder to copy.
+     * @return a new TypedBuilder as a copy of the given TypedBuilder.
+     */
+    def apply[T](other: TypedBuilder[T]): TypedBuilder[T] = other.monitor.synchronized {
+      // synchronize to get consistent snapshot of other
+      new TypedBuilder[T](
+        other.tableURI,
+        other.timeRange,
+        other.columnSpecs,
+        other.rowRangeSpec,
+        other.rowFilterSpec)
+    }
+    //TODO: Handle Qualified Specs.
+    private def columnToSpec(pair: String): (ColumnInputSpec) = {
+      val (column) = pair
       val colName: KijiColumnName = new KijiColumnName(column)
       if (colName.isFullyQualified) {
-        (QualifiedColumnInputSpec(colName.getFamily, colName.getQualifier), field)
+        QualifiedColumnInputSpec(colName.getFamily, colName.getQualifier)
       } else {
-        (ColumnFamilyInputSpec(colName.getFamily), field)
+        ColumnFamilyInputSpec(colName.getFamily)
       }
     }
+
   }
 
   /**
@@ -385,5 +658,50 @@ object KijiInput {
       rowRangeSpec = rowRangeSpec,
       rowFilterSpec = rowFilterSpec
     )
+  }
+
+  /**
+   * Method for creating a KijiTypedSource.
+   * @param tableUri addressing a table in a Kiji instance.
+   * @param timeRange that cells must fall into to be retrieved.
+   * @param columns are a series of pairs mapping column input specs to tuple field names.
+   *     Columns are specified as "family:qualifier" or, in the case of a column family input spec,
+   *     simply "family".
+   * @param rowRangeSpec the specification for which row interval to scan
+   * @param rowFilterSpec the specification for which filter to apply.
+   * @return a typed source for data in the Kiji table, whose row tuples will contain fields with
+   *         cell data from the requested columns and map-type column families.
+   */
+  private[express] def typedKijiSource[T](
+                              tableUri: String,
+                              timeRange: TimeRangeSpec,
+                              columns: List[_ <: ColumnInputSpec],
+                              rowRangeSpec: RowRangeSpec,
+                              rowFilterSpec: RowFilterSpec
+                              ): KijiTypedSource[T] = {
+    new KijiTypedSource[T](
+      tableUri,
+      timeRange,
+      None,
+      columns ,
+      rowRangeSpec = rowRangeSpec,
+      rowFilterSpec = rowFilterSpec
+    )
+  }
+
+  /**
+   * Converts a column -> Field mapping to a ColumnInputSpec -> Field mapping.
+   *
+   * @param pair column to Field binding.
+   * @return ColumnInputSpec to Field binding.
+   */
+  private def columnToSpec(pair: (String, Symbol)): (_ <: ColumnInputSpec, Symbol) = {
+    val (column, field) = pair
+    val colName: KijiColumnName = new KijiColumnName(column)
+    if (colName.isFullyQualified) {
+      (QualifiedColumnInputSpec(colName.getFamily, colName.getQualifier), field)
+    } else {
+      (ColumnFamilyInputSpec(colName.getFamily), field)
+    }
   }
 }
