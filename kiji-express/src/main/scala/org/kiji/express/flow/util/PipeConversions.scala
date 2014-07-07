@@ -27,8 +27,8 @@ import com.twitter.scalding.RichPipe
 import org.kiji.annotations.ApiAudience
 import org.kiji.annotations.ApiStability
 import org.kiji.annotations.Inheritance
-import org.kiji.express.flow.KijiPipe
-import org.kiji.express.flow.KijiSource
+import org.kiji.express.flow.{TypedKijiSource, KijiPipe, KijiSource}
+import com.twitter.scalding.typed.TypedPipe
 
 /**
  * PipeConversions contains implicit conversions necessary for KijiExpress that are not included in
@@ -75,7 +75,22 @@ private[express] trait PipeConversions {
    * @return a KijiPipe read from the specified source.
    */
   implicit def source2RichPipe(
-      source: KijiSource)(
-      implicit flowDef: FlowDef,
-      mode: Mode): KijiPipe = new KijiPipe(source.read(flowDef, mode))
+    source: KijiSource)(
+    implicit flowDef: FlowDef,
+    mode: Mode): KijiPipe = new KijiPipe(source.read(flowDef, mode))
+
+  /**
+   * Converts a [[TypedKijiSource]] to a TypedPipe. This method allows implicit conversion of a
+   * TypedKijiSource to a TypedPipe.
+   *
+   * We expect flowDef and mode implicits to be in scope. This should be true in the context of a
+   * Job, KijiJob, or inside the ShellRunner.
+   * @param source to convert into the TypedPipe
+   * @tparam T is the type parameter
+   * @return
+   */
+  implicit def typedSource2TypedPipe[T](
+    source: TypedKijiSource[T])(
+    implicit flowDef: FlowDef,
+    mode: Mode): TypedPipe[T] = TypedPipe.from(source)(flowDef, mode)
 }

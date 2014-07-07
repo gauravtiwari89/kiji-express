@@ -49,11 +49,7 @@ import org.apache.hadoop.mapred.JobConf
 
 import org.kiji.annotations.ApiAudience
 import org.kiji.annotations.ApiStability
-import org.kiji.express.flow.framework.DirectKijiSinkContext
-import org.kiji.express.flow.framework.KijiScheme
-import org.kiji.express.flow.framework.KijiTap
-import org.kiji.express.flow.framework.LocalKijiScheme
-import org.kiji.express.flow.framework.LocalKijiTap
+import org.kiji.express.flow.framework._
 import org.kiji.express.flow.util.ResourceUtil._
 import org.kiji.schema.EntityIdFactory
 import org.kiji.schema.Kiji
@@ -64,6 +60,11 @@ import org.kiji.schema.KijiTable
 import org.kiji.schema.KijiTableReader.KijiScannerOptions
 import org.kiji.schema.KijiTableWriter
 import org.kiji.schema.KijiURI
+import com.twitter.scalding.Test
+import scala.Some
+import com.twitter.scalding.HadoopTest
+import com.twitter.scalding.Hdfs
+import com.twitter.scalding.Local
 
 /**
  * A read or write view of a Kiji table.
@@ -429,9 +430,9 @@ private[express] object KijiSource {
       withKijiTable(uri, conf) { table: KijiTable =>
         // We also want the entire time range, so the test can inspect all data in the table.
         val request: KijiDataRequest =
-          KijiScheme.buildRequest(table.getLayout, TimeRangeSpec.All, inputColumns.values)
+          BaseKijiScheme.buildRequest(table.getLayout, TimeRangeSpec.All, inputColumns.values)
 
-        doAndClose(LocalKijiScheme.openReaderWithOverrides(table, request)) { reader =>
+        doAndClose(BaseLocalKijiScheme.openReaderWithOverrides(table, request)) { reader =>
           // Set up scanning options.
           val eidFactory = EntityIdFactory.getFactory(table.getLayout)
           val scannerOptions = new KijiScannerOptions()

@@ -45,9 +45,7 @@ import org.slf4j.LoggerFactory
 
 import org.kiji.annotations.ApiAudience
 import org.kiji.annotations.ApiStability
-import org.kiji.express.flow.ColumnInputSpec
-import org.kiji.express.flow.ColumnOutputSpec
-import org.kiji.express.flow.InvalidKijiTapException
+import org.kiji.express.flow._
 import org.kiji.express.flow.util.ResourceUtil.doAndRelease
 import org.kiji.mapreduce.framework.KijiConfKeys
 import org.kiji.mapreduce.framework.KijiTableInputFormat
@@ -77,7 +75,7 @@ import org.kiji.schema.{EntityId => JEntityId}
 final class KijiTap(
     // This is not a val because KijiTap needs to be serializable and KijiURI is not.
     uri: KijiURI,
-    private val scheme: KijiScheme
+    private val scheme: BaseKijiScheme
 ) extends Tap[
     JobConf,
     RecordReader[Container[JEntityId], Container[KijiRowData]],
@@ -285,7 +283,20 @@ final class KijiTap(
    */
   private[express] def validate(conf: Configuration): Unit = {
     val kijiUri: KijiURI = KijiURI.newBuilder(tableUri).build()
-    KijiTap.validate(kijiUri, scheme.inputColumns, scheme.outputColumns, conf)
+    scheme match {
+      case kijiScheme: KijiScheme =>  KijiTap.validate (
+        kijiUri,
+        kijiScheme.inputColumns.values.toList,
+        kijiScheme.outputColumns.values.toList,
+        conf
+      )
+      case kijiTypedScheme: KijiTypedScheme => KijiTap.validate(
+        kijiUri,
+        kijiTypedScheme.inputColumns,
+        kijiTypedScheme.outputColumns,
+        conf
+      )
+    }
   }
 }
 
@@ -300,8 +311,8 @@ object KijiTap {
    */
   private[express] def validate(
       kijiUri: KijiURI,
-      inputColumns: Map[String, ColumnInputSpec],
-      outputColumns: Map[String, ColumnOutputSpec],
+      inputColumns: Seq[ColumnInputSpec],
+      outputColumns: Seq[ColumnOutputSpec],
       conf: Configuration
   ) {
     // Try to open the Kiji instance.
@@ -331,8 +342,8 @@ object KijiTap {
     table.release() // Release the KijiTable.
 
     // Get a list of columns that don't exist
-    val inputColumnNames: Seq[KijiColumnName] = inputColumns.values.map(_.columnName).toList
-    val outputColumnNames: Seq[KijiColumnName] = outputColumns.values.map(_.columnName).toList
+    val inputColumnNames: Seq[KijiColumnName] = inputColumns.map(_.columnName).toList
+    val outputColumnNames: Seq[KijiColumnName] = outputColumns.map(_.columnName).toList
 
     val nonExistentColumnErrors = (inputColumnNames ++ outputColumnNames)
         // Filter for illegal columns, so we can throw an error.
@@ -366,4 +377,5 @@ object KijiTap {
       )
     }
   }
+
 }
