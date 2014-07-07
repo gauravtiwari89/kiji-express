@@ -70,6 +70,13 @@ object KijiOutput {
         outputColumns = columns)
   }
 
+  private[express] def typedBuilder[T](
+    tableUri: String): TypedKijiSource[T] = {
+    new TypedKijiSource[T](
+      tableAddress = tableUri,
+      timeRange = TimeRangeSpec.All)
+  }
+
   /**
    * Create a new empty KijiOutput.Builder.
    *
@@ -84,6 +91,21 @@ object KijiOutput {
    * @return a new KijiOutput.Builder as a copy of the given Builder.
    */
   def builder(other: Builder): Builder = Builder(other)
+
+  /**
+   *
+   * @tparam T
+   * @return
+   */
+  def typedBuilder[T]: TypedBuilder[T] = TypedBuilder[T]()
+
+  /**
+   *
+   * @param other
+   * @tparam T
+   * @return
+   */
+  def typedBuilder[T](other: TypedBuilder[T]): TypedBuilder[T] = TypedBuilder[T](other)
 
   /**
    * Builder for [[org.kiji.express.flow.KijiSource]]s to be used as outputs.
@@ -327,6 +349,79 @@ object KijiOutput {
           mTimestampField,
           mColumnSpecs.getOrElse(DEFAULT_COLUMN_OUTPUT_SPECS)
       )
+    }
+  }
+
+  /**
+   * Builder for [[org.kiji.express.flow.KijiSource]]s to be used as outputs.
+   *
+   * @param mTableURI string of the table to which to write.
+   */
+  @ApiAudience.Public
+  @ApiStability.Stable
+  final class TypedBuilder[T] private(
+    private[this] var mTableURI: Option[String]
+    ) {
+    /** protects read and write access to private var fields. */
+    private val monitor = new AnyRef
+
+    /**
+     * Configure the KijiSource to write to the table with the given URI.
+     *
+     * @param tableURI string of the table to which to write.
+     * @return this builder.
+     */
+    def withTableURI(tableURI: String): TypedBuilder[T] = monitor.synchronized {
+      require(tableURI != null, "Table URI may not be null.")
+      require(mTableURI.isEmpty, "Table URI already set to: " + mTableURI.get)
+      mTableURI = Some(tableURI)
+      this
+    }
+
+    /**
+     * Configure the KijiSource to write to the table with the given URI.
+     *
+     * @param tableURI string of the table to which to write.
+     * @return this builder.
+     */
+    def withTableURI(tableURI: KijiURI): TypedBuilder[T] = withTableURI(tableURI.toString)
+
+    /**
+     * Get the output table URI from this builder.
+     *
+     * @return the output table URI from this builder.
+     */
+    def tableURI: Option[String] = monitor.synchronized(mTableURI)
+
+    def build: TypedKijiSource[T] = monitor.synchronized {
+      KijiOutput.typedBuilder[T](
+        mTableURI.getOrElse(throw new IllegalStateException("Table URI must be specified.")))
+    }
+  }
+
+  /**
+   * Companion object providing factory methods for creating new instances of
+   * [[org.kiji.express.flow.KijiOutput.Builder]].
+   */
+  @ApiAudience.Public
+  @ApiStability.Stable
+  object TypedBuilder {
+    /**
+     * Create a new empty KijiOutput.Builder.
+     *
+     * @return a new empty KijiOutput.Builder.
+     */
+    private[express] def apply[T](): TypedBuilder[T] = new TypedBuilder[T](None)
+
+    /**
+     * Create a new KijiOutputBuilder as a copy of the given Builder.
+     *
+     * @param other Builder to copy.
+     * @return a new KijiOutputBuilder as a copy of the given Builder.
+     */
+    private[express] def apply[T](other: TypedBuilder[T]): TypedBuilder[T] =
+      other.monitor.synchronized {
+      new TypedBuilder(other.tableURI)
     }
   }
 

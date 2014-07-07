@@ -544,7 +544,7 @@ object KijiInput {
      * @return a new TypedKijiSource configured for input from the values stored in this
      *         TypedBuilder.
      */
-    def build: TypedKijiSource[T] = monitor.synchronized {
+    def build: TypedKijiSource[ExpressResult] = monitor.synchronized {
       KijiInput.typedKijiSource(
         tableURI.getOrElse(throw new IllegalStateException("Table URI must be specified.")),
         timeRange.getOrElse(DEFAULT_TIME_RANGE),
@@ -687,14 +687,14 @@ object KijiInput {
    * @return a typed source for data in the Kiji table, whose row tuples will contain fields with
    *         cell data from the requested columns and map-type column families.
    */
-  private[express] def typedKijiSource[T](
+  private[express] def typedKijiSource(
     tableUri: String,
     timeRange: TimeRangeSpec,
     columns: List[_ <: ColumnInputSpec],
     rowRangeSpec: RowRangeSpec,
     rowFilterSpec: RowFilterSpec
-    ): TypedKijiSource[T] = {
-    new TypedKijiSource[T](
+    ): TypedKijiSource[ExpressResult] = {
+    new TypedKijiSource[ExpressResult](
       tableUri,
       timeRange,
       columns ,

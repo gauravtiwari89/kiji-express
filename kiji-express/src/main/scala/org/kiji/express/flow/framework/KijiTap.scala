@@ -290,10 +290,10 @@ final class KijiTap(
         kijiScheme.outputColumns.values.toList,
         conf
       )
-      case kijiTypedScheme: KijiTypedScheme => KijiTap.validate(
+      case kijiTypedScheme: TypedKijiScheme => KijiTap.validate(
         kijiUri,
         kijiTypedScheme.inputColumns,
-        kijiTypedScheme.outputColumns,
+        Seq(),
         conf
       )
     }

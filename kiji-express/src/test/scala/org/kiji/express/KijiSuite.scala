@@ -23,12 +23,19 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import org.scalatest.FunSuiteLike
 
-import org.kiji.express.flow.FlowCell
-import org.kiji.schema.Kiji
-import org.kiji.schema.KijiColumnName
-import org.kiji.schema.KijiTable
-import org.kiji.schema.layout.KijiTableLayout
+import org.kiji.express.flow.{ExpressResult, FlowCell}
+
+import org.kiji.schema.layout.{HBaseColumnNameTranslator, KijiTableLayout}
 import org.kiji.schema.util.InstanceBuilder
+import org.apache.hadoop.hbase.KeyValue
+import org.apache.hadoop.hbase.util.Bytes
+import org.apache.hadoop.hbase.client.Result
+import org.kiji.schema.KijiDataRequestBuilder.ColumnsDef
+import org.kiji.schema.impl.hbase.{HBaseKijiTable, HBaseKijiRowData}
+import scala.collection.mutable
+import org.kiji.schema._
+import org.kiji.express.flow.util.ResourceUtil
+
 
 /** Contains convenience methods for writing tests that use Kiji. */
 trait KijiSuite extends FunSuiteLike {
@@ -64,6 +71,41 @@ trait KijiSuite extends FunSuiteLike {
           val (version, value) = entry
           FlowCell(parsedName.getFamily, parsedName.getQualifier, version, value)
         }
+  }
+
+  //TODO make this accept both group type and map type families.
+  def kijiRowDataSlice(
+    table: KijiTable,
+    entityId: String,
+    columnName: String,
+    values: (Long, String)*
+    ): List[ExpressResult] = {
+    val parsedName = KijiColumnName.create(columnName)
+
+    val entity = EntityIdFactory.getFactory(table.getLayout).getEntityId(entityId)
+    ResourceUtil.doAndClose(table.getWriterFactory.openAtomicPutter) {
+      atomicPutter =>
+        atomicPutter.begin(entity)
+        values.foreach {
+          value: (Long, String) =>
+            val (timestamp, valString) = value
+            atomicPutter.put(parsedName.getFamily, parsedName.getQualifier, timestamp, valString)
+        }
+        atomicPutter.commit()
+    }
+
+    val dummyDataRequest: KijiDataRequest =
+      KijiDataRequest.builder()
+        .addColumns(
+          ColumnsDef.create().withMaxVersions(5)
+            .add(parsedName.getFamily, parsedName.getQualifier))
+        .build()
+    val retList: mutable.MutableList[ExpressResult] = mutable.MutableList()
+    ResourceUtil.doAndClose(table.getReaderFactory.openTableReader) {
+      reader =>
+        retList.+=(ExpressResult(reader.get(entity, dummyDataRequest)))
+    }
+    retList.toList
   }
 
   /**

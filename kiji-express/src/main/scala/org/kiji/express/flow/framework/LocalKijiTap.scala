@@ -224,8 +224,8 @@ final private[express] class LocalKijiTap(
       case typedLocalKijiScheme: TypedLocalKijiScheme =>
         KijiTap.validate(
           uri,
-          typedLocalKijiScheme.inputColumns.toList,
-          typedLocalKijiScheme.outputColumns.toList,
+          typedLocalKijiScheme.inputColumns,
+          Seq(),
           HadoopUtil.createJobConf(conf, new JobConf(HBaseConfiguration.create())))
     }
 }

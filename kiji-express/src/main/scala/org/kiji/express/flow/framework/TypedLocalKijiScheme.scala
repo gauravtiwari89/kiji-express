@@ -34,15 +34,13 @@ import org.kiji.schema.KijiTableReader.KijiScannerOptions
 import scala.collection.JavaConverters.asScalaIteratorConverter
 import cascading.tuple.Tuple
 
-private [express] case class TypedLocalKijiScheme(
+private[express] case class TypedLocalKijiScheme(
   private[express] val uri: KijiURI,
   private[express] val timeRange: TimeRangeSpec,
   private[express] val inputColumns: List[ColumnInputSpec] = List(),
-  private[express] val outputColumns: List[ColumnOutputSpec] = List(),
   private[express] val rowRangeSpec: RowRangeSpec,
   private[express] val rowFilterSpec: RowFilterSpec)
-  extends BaseLocalKijiScheme
-  {
+  extends BaseLocalKijiScheme {
 
   /**
    * Reads and converts a row from a Kiji table to a Cascading Tuple. This method
@@ -60,7 +58,7 @@ private [express] case class TypedLocalKijiScheme(
     if (context.iterator.hasNext) {
       // Get the current row.
       val row: KijiRowData = context.iterator.next()
-      val result: Tuple = KijiTypedScheme.rowToTuple(row)
+      val result: Tuple = TypedKijiScheme.rowToTuple(row)
 
       // Set the result tuple and return from this method.
       sourceCall.getIncomingEntry.setTuple(result)
@@ -117,7 +115,59 @@ private [express] case class TypedLocalKijiScheme(
     }
   }
 
+  /**
+   * Sets up any resources required to write to a Kiji table.
+   *
+   * @param process Current Cascading flow being run.
+   * @param sinkCall Object containing the context for this source.
+   */
+  override def sinkPrepare(
+    process: FlowProcess[Properties],
+    sinkCall: SinkCall[DirectKijiSinkContext, OutputStream]) {
+    val conf: JobConf =
+      HadoopUtil.createJobConf(process.getConfigCopy, new JobConf(HBaseConfiguration.create()))
+    withKijiTable(uri, conf) { table =>
+      // Set the sink context to an opened KijiTableWriter.
+      sinkCall.setContext(
+        DirectKijiSinkContext(
+          EntityIdFactory.getFactory(table.getLayout),
+          table.getWriterFactory.openBufferedWriter())
+      )
+    }
+  }
+
+  /**
+   * Converts and writes a Cascading Tuple to a Kiji table.
+   *
+   * @param process Current Cascading flow being run.
+   * @param sinkCall Object containing the context for this source.
+   */
   override def sink(
-    flowProcess: FlowProcess[Properties],
-    sinkCall: SinkCall[DirectKijiSinkContext, OutputStream]): Unit = ???
+    process: FlowProcess[Properties],
+    sinkCall: SinkCall[DirectKijiSinkContext, OutputStream]) {
+    val DirectKijiSinkContext(eidFactory, writer) = sinkCall.getContext
+    //The first object in tuple entry contains the data in the pipe.
+    val typedPipeVal: Product = sinkCall.getOutgoingEntry.getObject(0).asInstanceOf[Product]
+    typedPipeVal match {
+      //Value being written to a single column.
+      case singleVal: ExpressColumnOutput[_] =>
+        writer.put(
+          singleVal.entityId.toJavaEntityId(eidFactory),
+          singleVal.family,
+          singleVal.qualifier,
+          singleVal.encode(singleVal.datum)
+        )
+      //Value being written to multiple columns.
+      case nValTuple: Product =>
+        nValTuple.productIterator.toList.foreach { anyVal =>
+          val singleVal = anyVal.asInstanceOf[ExpressColumnOutput[_]]
+          writer.put(
+            singleVal.entityId.toJavaEntityId(eidFactory),
+            singleVal.family,
+            singleVal.qualifier,
+            singleVal.encode(singleVal.datum)
+          )
+        }
+    }
+  }
 }

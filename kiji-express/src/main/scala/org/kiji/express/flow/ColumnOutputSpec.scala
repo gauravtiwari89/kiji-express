@@ -659,3 +659,23 @@ object ColumnFamilyOutputSpec {
     }
   }
 }
+/**
+ * Typed parameter for output to a kiji - table.
+ * @param entityId
+ * @param family
+ * @param qualifier
+ */
+final case class ExpressColumnOutput[T](
+  entityId: EntityId,
+  family: String,
+  qualifier: String,
+  datum:T,
+  schemaSpec: SchemaSpec
+  ) extends ColumnOutputSpec {
+  /**
+   * The [[KijiColumnName]] to write data to.
+   *
+   * @return the name of the column or column family to write data to.
+   */
+  override def columnName: KijiColumnName = KijiColumnName.create(family, qualifier)
+}

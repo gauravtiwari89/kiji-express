@@ -41,22 +41,7 @@ trait BaseKijiScheme extends Scheme[
   DirectKijiSinkContext
   ]{
 
-  /**
-   * Sets up any resources required for the MapReduce job. This method is called on the cluster.
-   *
-   * @param flow is the current Cascading flow being run.
-   * @param sourceCall containing the context for this source.
-   */
-  override def sourcePrepare(
-    flow: FlowProcess[JobConf],
-    sourceCall: SourceCall[
-      KijiSourceContext,
-      RecordReader[Container[JEntityId], Container[KijiRowData]]
-      ]
-    ) {
-    // Set the context used when reading data from the source.
-    sourceCall.setContext(KijiSourceContext(sourceCall.getInput.createValue()))
-  }
+
 
   /**
    * Cleans up any resources used during the MapReduce job. This method is called
@@ -73,6 +58,23 @@ trait BaseKijiScheme extends Scheme[
       ]
     ) {
     sourceCall.setContext(null)
+  }
+
+  /**
+   * Sets up any resources required for the MapReduce job. This method is called on the cluster.
+   *
+   * @param flow is the current Cascading flow being run.
+   * @param sourceCall containing the context for this source.
+   */
+  override def sourcePrepare(
+    flow: FlowProcess[JobConf],
+    sourceCall: SourceCall[
+      KijiSourceContext,
+      RecordReader[Container[JEntityId], Container[KijiRowData]]
+      ]
+    ) {
+    // Set the context used when reading data from the source.
+    sourceCall.setContext(KijiSourceContext(sourceCall.getInput.createValue()))
   }
 
 
@@ -98,6 +100,8 @@ trait BaseKijiScheme extends Scheme[
   }
 
 
+
+
   /**
    * Cleans up any resources used during the MapReduce job. This method is called on the cluster.
    *
@@ -113,7 +117,12 @@ trait BaseKijiScheme extends Scheme[
     sinkCall.setContext(null)
   }
 
-  def configureRequest(uri:KijiURI,conf:JobConf, rowRangeSpec: RowRangeSpec, rowFilterSpec:RowFilterSpec){
+  def configureRequest(
+    uri:KijiURI,
+    conf:JobConf,
+    rowRangeSpec: RowRangeSpec,
+    rowFilterSpec:RowFilterSpec
+  ){
     val eidFactory = withKijiTable(uri, conf) { table =>
       EntityIdFactory.getFactory(table.getLayout())
     }
@@ -145,9 +154,6 @@ trait BaseKijiScheme extends Scheme[
       case None => {}
     }
   }
-
-
-
 }
 
 object BaseKijiScheme {
@@ -239,7 +245,6 @@ object BaseKijiScheme {
   }
 
 }
-
 
 /**
  * Container for a Kiji row data and Kiji table layout object that is required by a map reduce

@@ -27,7 +27,7 @@ import com.twitter.scalding.RichPipe
 import org.kiji.annotations.ApiAudience
 import org.kiji.annotations.ApiStability
 import org.kiji.annotations.Inheritance
-import org.kiji.express.flow.{TypedKijiSource, KijiPipe, KijiSource}
+import org.kiji.express.flow.{ExpressResult, TypedKijiSource, KijiPipe, KijiSource}
 import com.twitter.scalding.typed.TypedPipe
 
 /**
@@ -92,5 +92,5 @@ private[express] trait PipeConversions {
   implicit def typedSource2TypedPipe[T](
     source: TypedKijiSource[T])(
     implicit flowDef: FlowDef,
-    mode: Mode): TypedPipe[T] = TypedPipe.from(source)(flowDef, mode)
+    mode: Mode): TypedPipe[ExpressResult] = TypedPipe.from(source)(flowDef, mode)
 }

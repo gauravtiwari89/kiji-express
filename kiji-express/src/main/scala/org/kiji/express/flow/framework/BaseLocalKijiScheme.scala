@@ -70,7 +70,6 @@ trait BaseLocalKijiScheme
     // a Kiji table.
   }
 
-
   /**
    * Cleans up any resources used to read from a Kiji table.
    *

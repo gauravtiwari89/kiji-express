@@ -54,7 +54,6 @@ import org.kiji.schema.KijiRowData
 import org.kiji.schema.KijiURI
 import org.kiji.schema.MapFamilyVersionIterator
 import org.kiji.schema.{EntityId => JEntityId}
-import scala.Some
 
 /**
  * A Kiji-specific implementation of a Cascading `Scheme`, which defines how to read and write the
@@ -229,9 +228,6 @@ class KijiScheme(
       writer.put(eid, column.columnName.getFamily, qualifier, version, column.encode(value))
     }
   }
-
-
-
 
   override def equals(obj: Any): Boolean = obj match {
     case other: KijiScheme => (
