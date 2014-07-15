@@ -169,8 +169,7 @@ class TypedKijiScheme(
   }
 
   /**
-   * Converts and writes a Cascading Tuple to a Kiji table. This method is called once
-   * for each row on the cluster, so it should be kept as light as possible.
+   * Converts and writes a Cascading Tuple to a Kiji table.
    *
    * @param flow is the current Cascading flow being run.
    * @param sinkCall containing the context for this source.
@@ -185,22 +184,45 @@ class TypedKijiScheme(
     typedPipeVal match {
       //Value being written to a single column.
       case singleVal: ExpressColumnOutput[_] =>
-        writer.put(
-          singleVal.entityId.toJavaEntityId(eidFactory),
-          singleVal.family,
-          singleVal.qualifier,
-          singleVal.encode(singleVal.datum)
-        )
+        singleVal.timeStamp match {
+          case Some(timestamp) =>
+            writer.put(
+              singleVal.entityId.toJavaEntityId (eidFactory),
+              singleVal.family,
+              singleVal.qualifier,
+              timestamp,
+              singleVal.encode (singleVal.datum)
+            )
+          case None =>
+            writer.put(
+              singleVal.entityId.toJavaEntityId (eidFactory),
+              singleVal.family,
+              singleVal.qualifier,
+              singleVal.encode (singleVal.datum)
+            )
+        }
+
       //Value being written to multiple columns.
       case nValTuple: Product =>
         nValTuple.productIterator.toList.foreach { anyVal =>
           val singleVal = anyVal.asInstanceOf[ExpressColumnOutput[_]]
-          writer.put(
-            singleVal.entityId.toJavaEntityId(eidFactory),
-            singleVal.family,
-            singleVal.qualifier,
-            singleVal.encode(singleVal.datum)
-          )
+          singleVal.timeStamp match {
+            case Some(timestamp) =>
+              writer.put(
+                singleVal.entityId.toJavaEntityId (eidFactory),
+                singleVal.family,
+                singleVal.qualifier,
+                timestamp,
+                singleVal.encode (singleVal.datum)
+              )
+            case None =>
+              writer.put(
+                singleVal.entityId.toJavaEntityId (eidFactory),
+                singleVal.family,
+                singleVal.qualifier,
+                singleVal.encode (singleVal.datum)
+              )
+          }
         }
     }
   }

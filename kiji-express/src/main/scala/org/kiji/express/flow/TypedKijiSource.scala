@@ -28,6 +28,7 @@ import com.twitter.scalding.Hdfs
 import com.twitter.scalding.Mappable
 import com.twitter.scalding.Mode
 import com.twitter.scalding.Local
+import com.twitter.scalding.Test
 import com.twitter.scalding.TupleConverter
 import com.twitter.scalding.TupleSetter
 import com.twitter.scalding.typed.TypedSink
@@ -135,6 +136,7 @@ sealed class TypedKijiSource[-T](
     mode match {
       case Hdfs(_, _) => new KijiTap(uri, typedKijiScheme).asInstanceOf[Tap[_, _, _]]
       case Local(_) => new LocalKijiTap(uri, typedLocalKijiScheme).asInstanceOf[Tap[_, _, _]]
+      case Test(_) => new LocalKijiTap(uri, typedLocalKijiScheme).asInstanceOf[Tap[_, _, _]]
       case _ => throw new RuntimeException("Trying to create invalid tap")
     }
   }

@@ -22,7 +22,6 @@ import java.io.OutputStream
 import java.io.InputStream
 import java.util.Properties
 
-import scala.Some
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
 import cascading.scheme.SinkCall
@@ -37,13 +36,11 @@ import org.kiji.schema.EntityIdFactory
 import org.kiji.schema.KijiRowData
 import org.kiji.schema.KijiTable
 import org.kiji.schema.KijiURI
-import org.kiji.express.flow.ExpressColumnOutput
-import org.kiji.express.flow.ColumnInputSpec
-import org.kiji.express.flow.RowRangeSpec
-import org.kiji.express.flow.RowFilterSpec
-import org.kiji.express.flow.TimeRangeSpec
+import org.kiji.express.flow._
 import org.kiji.express.flow.util.ResourceUtil.withKijiTable
 import org.kiji.schema.KijiTableReader.KijiScannerOptions
+import org.kiji.express.flow.ExpressColumnOutput
+import scala.Some
 
 
 /**
@@ -190,22 +187,46 @@ private[express] case class TypedLocalKijiScheme(
     typedPipeVal match {
       //Value being written to a single column.
       case singleVal: ExpressColumnOutput[_] =>
-        writer.put(
-          singleVal.entityId.toJavaEntityId(eidFactory),
-          singleVal.family,
-          singleVal.qualifier,
-          singleVal.encode(singleVal.datum)
-        )
+        singleVal.timeStamp match {
+          case Some(timestamp) =>
+            //Timestamp specified.
+            writer.put(
+              singleVal.entityId.toJavaEntityId (eidFactory),
+              singleVal.family,
+              singleVal.qualifier,
+              timestamp,
+              singleVal.encode (singleVal.datum)
+            )
+          case None =>
+            //Timestamp not specified.
+            writer.put(
+              singleVal.entityId.toJavaEntityId (eidFactory),
+              singleVal.family,
+              singleVal.qualifier,
+              singleVal.encode (singleVal.datum)
+            )
+        }
       //Value being written to multiple columns.
       case nValTuple: Product =>
         nValTuple.productIterator.toList.foreach { anyVal =>
           val singleVal = anyVal.asInstanceOf[ExpressColumnOutput[_]]
-          writer.put(
-            singleVal.entityId.toJavaEntityId(eidFactory),
-            singleVal.family,
-            singleVal.qualifier,
-            singleVal.encode(singleVal.datum)
-          )
+          singleVal.timeStamp match {
+            case Some(timestamp) =>
+              writer.put(
+                singleVal.entityId.toJavaEntityId (eidFactory),
+                singleVal.family,
+                singleVal.qualifier,
+                timestamp,
+                singleVal.encode (singleVal.datum)
+              )
+            case None =>
+              writer.put(
+                singleVal.entityId.toJavaEntityId (eidFactory),
+                singleVal.family,
+                singleVal.qualifier,
+                singleVal.encode (singleVal.datum)
+              )
+          }
         }
     }
   }

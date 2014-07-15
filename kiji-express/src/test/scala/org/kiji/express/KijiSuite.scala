@@ -73,7 +73,14 @@ trait KijiSuite extends FunSuiteLike {
         }
   }
 
-  //TODO make this accept both group type and map type families.
+  /**
+   *
+   * @param table
+   * @param entityId
+   * @param columnName
+   * @param values
+   * @return
+   */
   def kijiRowDataSlice(
     table: KijiTable,
     entityId: String,

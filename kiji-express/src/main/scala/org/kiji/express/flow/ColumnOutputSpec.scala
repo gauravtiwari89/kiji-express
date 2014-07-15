@@ -29,7 +29,7 @@ import org.kiji.schema.KijiInvalidNameException
 
 /**
  * A specification describing how to write data from a scalding tuple field to a Kiji table.
- * Provides access to options common to all types of column output specs. There are two types of
+ * Provides access to options common to all types of column output specs. There are three types of
  * column output specs:
  * <ul>
  *   <li>
@@ -39,6 +39,10 @@ import org.kiji.schema.KijiInvalidNameException
  *   <li>
  *     [[org.kiji.express.flow.ColumnFamilyOutputSpec]] - Describes how to write data from a
  *     scalding tuple to a column family in a Kiji table.
+ *   </li>
+ *   <li>
+ *     [[org.kiji.express.flow.ExpressColumnOutput]] - Holds the data and describes how to write it
+ *     to a column in a Kiji table.
  *   </li>
  * </ul>
  *
@@ -666,7 +670,7 @@ object ColumnFamilyOutputSpec {
  * The sink implementation for [[org.kiji.express.flow.framework.TypedKijiScheme]] and
  * [[org.kiji.express.flow.framework.TypedLocalKijiScheme]] expect the
  * [[com.twitter.scalding.typed.TypedPipe]] leading to the sink to have a type of either a
- * ExpressColumnOutput object or scala tuple of multiple ExpressColumnOutput objects.
+ * ExpressColumnOutput object:
  *
  * eg:{{{
  *
@@ -677,13 +681,25 @@ object ColumnFamilyOutputSpec {
  *      val (entityId, value) = existingTuple
  *      ExpressColumn(entityId, "myFamily", "myQualifier", value)
  *   }.write(KijiOutput.typedBuilder.withTableURI("kiji://.env/mytable").build)
+ * }}}
+ *
+ * or it could be a scala tuple of multiple ExpressColumnOutput objects:
+ * {{{
+ *    val preExistingPipe: TypedPipe[EntityId, Long] = getPreExistingPipe()
  *
  *   //Writes values from a pre-existing typed pipe to two columns in kiji table.
  *   preExistingPipe.map{existingTuple: (EntityId, Long) =>
  *      val (entityId, value) = existingTuple
+
  *      val col1: ExpressColumn = ExpressColumn(entityId, "myFamily", "myQualifier", value)
- *      val col2: ExpressColumn = ExpressColumn(entityId, "myFamily2", "myQalifier2", value * value)
- *      //Return a tuple of ExpressColumns
+ *      val col2: ExpressColumn = ExpressColumn(
+ *          entityId,
+ *          "myFamily2",
+ *          "myQalifier2",
+ *          value * value,
+ *          timeStamp = Some(1234l)
+ *       )
+ *
  *      (col1, col2)
  *   }.write(KijiOutput.typedBuilder.withTableURI("kiji://.env/mytable").build)
  *
@@ -698,7 +714,8 @@ final case class ExpressColumnOutput[T](
   family: String,
   qualifier: String,
   datum:T,
-  schemaSpec: SchemaSpec
+  schemaSpec: SchemaSpec = ColumnOutputSpec.DEFAULT_SCHEMA_SPEC,
+  timeStamp: Option[Long] = None
   ) extends ColumnOutputSpec {
   /**
    * The [[KijiColumnName]] for the column specified by this object.

@@ -28,60 +28,65 @@ import com.twitter.scalding.{JobTest, TypedTsv, Args}
 import scala.collection.mutable.Buffer
 import org.apache.avro.util.Utf8
 
+
 class AnagramCountJob(args: Args) extends KijiJob(args) {
-  KijiInput.typedBuilder
-    .withTableURI(args("input"))
-    .withColumnSpecs(
-      QualifiedColumnInputSpec.builder
-        .withColumn("family", "column1")
-        .withMaxVersions(all)
-        .build
-    ).build.flatMap { entry: ExpressResult =>
-    entry.cellsIterator("family", "column1").map {
-      cell: FlowCell[_] =>
-        cell.datum.asInstanceOf[Utf8].toString.sorted
+
+  new TypedKijiSource[ExpressResult](
+    args("input"),
+    TimeRangeSpec.All,
+    List(QualifiedColumnInputSpec.builder.withColumn("family", "column1").withMaxVersions(99).build)
+  )
+    .flatMap { entry: ExpressResult =>
+    entry.cellsIterator[Utf8]("family", "column1").map {
+      cell: FlowCell[Utf8] => cell.datum.toString.sorted
     }
   }.groupBy { word: String => word}.size.toTypedPipe
     .write(TypedTsv[(String, Long)](args("output")))
 }
+
 
 @RunWith(classOf[JUnitRunner])
 class TypeSafeKijiSuite extends KijiSuite {
 
   val tableLayout: KijiTableLayout = ResourceUtil.layout(KijiTableLayouts.SIMPLE_TWO_COLUMNS)
   val kijiTable: KijiTable = makeTestKijiTable(tableLayout)
+
   test("A simple type safe job that counts the number of word anagrams.") {
     ResourceUtil.doAndRelease(kijiTable) {
       table: KijiTable =>
+
         val uri = table.getURI.toString
         val anagramCountInput = kijiRowDataSlice(
           kijiTable,
           "row01",
           "family:column1",
           (1L, "teba"), (2L, "alpah"), (3L, "alpha"),
-          (4L, "beta"), (5L, "alaph"), (1L, "gamma"))
+          (4L, "beta"), (5L, "alaph"), (5L, "gamma"), (7L, "beta"))
 
-        def validateAnagramCount(outputBuffer: Buffer[(String, Long)]) {
-          print(outputBuffer.toMap)
+        // Method to validate output.
+        def validateOutput(outputBuffer: Buffer[(String, Long)]) {
+          val bufferMap = outputBuffer.toMap
+          assert(bufferMap("aagmm") == 1l)
+          assert(bufferMap("aahlp") == 3l)
+          assert(bufferMap("abet") == 2l)
         }
 
         JobTest(new AnagramCountJob(_))
           .arg("input", uri)
           .arg("output", "outputFile")
           .source(
-            KijiInput.typedBuilder
-              .withTableURI(uri)
-              .withColumnSpecs(QualifiedColumnInputSpec.builder
-              .withColumn("family", "column1")
-              .withMaxVersions(all)
-              .build
-              ).build,
-            anagramCountInput)
-          .sink(TypedTsv[(String, Long)]("outputFile"))(validateAnagramCount)
+            new TypedKijiSource[ExpressResult](
+              uri,
+              TimeRangeSpec.All,
+              List(QualifiedColumnInputSpec.builder.withColumn("family", "column1").build)),
+            anagramCountInput
+          )
+          .sink(TypedTsv[(String, Long)]("outputFile"))(validateOutput)
           // Run the test job.
           .run
           .finish
     }
   }
 }
+
 
