@@ -659,11 +659,39 @@ object ColumnFamilyOutputSpec {
     }
   }
 }
+
 /**
- * Typed parameter for output to a kiji - table.
- * @param entityId
- * @param family
- * @param qualifier
+ * A type class that is required for writing data to a KijiExpress column via the type safe API.
+ *
+ * The sink implementation for [[org.kiji.express.flow.framework.TypedKijiScheme]] and
+ * [[org.kiji.express.flow.framework.TypedLocalKijiScheme]] expect the
+ * [[com.twitter.scalding.typed.TypedPipe]] leading to the sink to have a type of either a
+ * ExpressColumnOutput object or scala tuple of multiple ExpressColumnOutput objects.
+ *
+ * eg:{{{
+ *
+ *   val preExistingPipe: TypedPipe[EntityId, Long] = getPreExistingPipe()
+ *
+ *   //Writes values from a pre-existing typed pipe to a column in kiji table.
+ *   preExistingPipe.map{existingTuple: (EntityId, Long) =>
+ *      val (entityId, value) = existingTuple
+ *      ExpressColumn(entityId, "myFamily", "myQualifier", value)
+ *   }.write(KijiOutput.typedBuilder.withTableURI("kiji://.env/mytable").build)
+ *
+ *   //Writes values from a pre-existing typed pipe to two columns in kiji table.
+ *   preExistingPipe.map{existingTuple: (EntityId, Long) =>
+ *      val (entityId, value) = existingTuple
+ *      val col1: ExpressColumn = ExpressColumn(entityId, "myFamily", "myQualifier", value)
+ *      val col2: ExpressColumn = ExpressColumn(entityId, "myFamily2", "myQalifier2", value * value)
+ *      //Return a tuple of ExpressColumns
+ *      (col1, col2)
+ *   }.write(KijiOutput.typedBuilder.withTableURI("kiji://.env/mytable").build)
+ *
+ * }}}
+ *
+ * @param entityId entityId for the row.
+ * @param family of the column being written to.
+ * @param qualifier of the column being written to.
  */
 final case class ExpressColumnOutput[T](
   entityId: EntityId,
@@ -673,7 +701,7 @@ final case class ExpressColumnOutput[T](
   schemaSpec: SchemaSpec
   ) extends ColumnOutputSpec {
   /**
-   * The [[KijiColumnName]] to write data to.
+   * The [[KijiColumnName]] for the column specified by this object.
    *
    * @return the name of the column or column family to write data to.
    */

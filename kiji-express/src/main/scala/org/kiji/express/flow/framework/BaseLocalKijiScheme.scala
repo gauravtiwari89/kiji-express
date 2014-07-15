@@ -1,5 +1,5 @@
 /**
- * (c) Copyright 2013 WibiData, Inc.
+ * (c) Copyright 2014 WibiData, Inc.
  *
  * See the NOTICE file distributed with this work for additional
  * information regarding copyright ownership.
@@ -18,39 +18,49 @@
  */
 package org.kiji.express.flow.framework
 
+import java.io.OutputStream
+import java.io.InputStream
+import java.util.Properties
+
 import scala.collection.JavaConverters.collectionAsScalaIterableConverter
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 
-import org.kiji.annotations.{ApiStability, ApiAudience}
-import org.kiji.schema._
-import org.apache.hadoop.conf.Configuration
-import cascading.scheme.{SinkCall, SourceCall, Scheme}
-import java.util.Properties
 import cascading.flow.FlowProcess
+import cascading.scheme.Scheme
+import cascading.scheme.SinkCall
+import cascading.scheme.SourceCall
 import cascading.tap.Tap
-import java.io.{OutputStream, InputStream}
+import org.apache.hadoop.conf.Configuration
+
+import org.kiji.annotations.ApiAudience
+import org.kiji.annotations.ApiStability
+import org.kiji.schema.KijiColumnName
+import org.kiji.schema.KijiDataRequest
+import org.kiji.schema.KijiTable
+import org.kiji.schema.KijiTableReader
+import org.kiji.schema.KijiRowData
+import org.kiji.schema.KijiRowScanner
+import org.kiji.schema.KijiURI
 import org.kiji.schema.layout.ColumnReaderSpec
 import org.kiji.schema.KijiDataRequest.Column
 
 /**
- * Encapsulates the state required to read from a Kiji table locally, for use in
- * [[org.kiji.express.flow.framework.LocalKijiScheme]].
+ * A Base trait containing Kiji-specific implementation of a Cascading `Scheme` that is common for
+ * both the Fields API, and the Type-safe API for running locally. Scheme's [[LocalKijiScheme]] and
+ * [[TypedLocalKijiScheme]] extend this trait and share the implemented methods.
  *
- * @param reader that has an open connection to the desired Kiji table.
- * @param scanner that has an open connection to the desired Kiji table.
- * @param iterator that maintains the current row pointer.
- * @param tableUri of the kiji table.
+ * Note: [[LocalKijiScheme]] and [[TypedLocalKijiScheme]] log every row that was skipped because of
+ * missing data in a column. It lacks the parameter `loggingInterval` in [[KijiScheme]] that
+ * configures how many skipped rows will be logged.
+ *
+ * Note: Warnings about a missing serialVersionUID are ignored here. When KijiScheme is
+ * serialized, the result is not persisted anywhere making serialVersionUID unnecessary.
+ *
+ * Note: If sourcing from a KijiTable, it is never closed.  The reason for this is that if any of
+ * the columns in the request are paged, they might still need an open KijiTable for the rest of
+ * the flow.  It is expected that any job using this as a source is not long-running and is
+ * contained to a single JVM.
  */
-@ApiAudience.Private
-@ApiStability.Stable
-final private[express] case class InputContext(
-  reader: KijiTableReader,
-  scanner: KijiRowScanner,
-  iterator: Iterator[KijiRowData],
-  tableUri: KijiURI,
-  configuration: Configuration
-  )
-
 trait BaseLocalKijiScheme
   extends Scheme[Properties, InputStream, OutputStream, InputContext, DirectKijiSinkContext] {
 
@@ -87,7 +97,6 @@ trait BaseLocalKijiScheme
     sourceCall.setContext(null)
   }
 
-
   /**
    * Sets any configuration options that are required for running a local job
    * that writes to a Kiji table.
@@ -118,11 +127,12 @@ trait BaseLocalKijiScheme
     writer.close()
     sinkCall.setContext(null)
   }
-
 }
 
-object BaseLocalKijiScheme{
-
+/**
+ * Companion object for the [[BaseLocalKijiScheme]].
+ */
+object BaseLocalKijiScheme {
   /**
    * Opens a Kiji table reader correctly specifying column schema overrides from a KijiDataRequest.
    *
@@ -134,11 +144,29 @@ object BaseLocalKijiScheme{
     val overrides: Map[KijiColumnName, ColumnReaderSpec] = request
       .getColumns
       .asScala
-      .map { column: Column => (column.getColumnName, column.getReaderSpec) }
+      .map { column: Column => (column.getColumnName, column.getReaderSpec)}
       .toMap
     table.getReaderFactory.readerBuilder()
       .withColumnReaderSpecOverrides(overrides.asJava)
       .buildAndOpen()
   }
-
 }
+
+/**
+ * Encapsulates the state required to read from a Kiji table locally, for use in
+ * [[org.kiji.express.flow.framework.LocalKijiScheme]].
+ *
+ * @param reader that has an open connection to the desired Kiji table.
+ * @param scanner that has an open connection to the desired Kiji table.
+ * @param iterator that maintains the current row pointer.
+ * @param tableUri of the kiji table.
+ */
+@ApiAudience.Private
+@ApiStability.Stable
+final private[express] case class InputContext(
+  reader: KijiTableReader,
+  scanner: KijiRowScanner,
+  iterator: Iterator[KijiRowData],
+  tableUri: KijiURI,
+  configuration: Configuration
+  )

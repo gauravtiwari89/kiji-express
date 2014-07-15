@@ -53,6 +53,10 @@ import scala.Some
  * Cascading's local job runner. [[org.kiji.express.flow.framework.KijiScheme]] and
  * LocalKijiScheme both define how to read and write the data stored in a Kiji table.
  *
+ * [[LocalKijiScheme]] extends trait [[org.kiji.express.flow.framework.BaseLocalKijiScheme]],
+ * which holds method implementations of [[cascading.scheme.Scheme]] that are common to both
+ * [[LocalKijiScheme]] and [[TypedLocalKijiScheme]] for running jobs locally.
+ *
  * This scheme is meant to be used with [[org.kiji.express.flow.framework.LocalKijiTap]] and
  * Cascading's local job runner. Jobs run with Cascading's local job runner execute on
  * your local machine instead of a cluster. This can be helpful for testing or quick jobs.
@@ -66,19 +70,8 @@ import scala.Some
  * data from a Cascading flow to a Kiji table
  * (see `sink(cascading.flow.FlowProcess, cascading.scheme.SinkCall)`).
  *
- * Note: LocalKijiScheme logs every row that was skipped because of missing data in a column. It
- * lacks the parameter `loggingInterval` in [[org.kiji.express.flow.framework.KijiScheme]] that
- * configures how many skipped rows will be logged.
- *
- * Note: Warnings about a missing serialVersionUID are ignored here. When KijiScheme is
- * serialized, the result is not persisted anywhere making serialVersionUID unnecessary.
- *
- * Note: If sourcing from a KijiTable, it is never closed.  The reason for this is that if any of
- * the columns in the request are paged, they might still need an open KijiTable for the rest of
- * the flow.  It is expected that any job using this as a source is not long-running and is
- * contained to a single JVM.
- *
  * @see [[org.kiji.express.flow.framework.KijiScheme]]
+ * @see [[org.kiji.express.flow.framework.BaseLocalKijiScheme]]
  *
  * @param uri of table to be written to.
  * @param timeRange to include from the Kiji table.

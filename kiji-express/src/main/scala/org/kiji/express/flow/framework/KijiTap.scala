@@ -293,6 +293,7 @@ final class KijiTap(
       case kijiTypedScheme: TypedKijiScheme => KijiTap.validate(
         kijiUri,
         kijiTypedScheme.inputColumns,
+        //KijiTypedSource takes no output column params.
         Seq(),
         conf
       )

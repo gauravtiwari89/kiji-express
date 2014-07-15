@@ -1,5 +1,5 @@
 /**
- * (c) Copyright 2013 WibiData, Inc.
+ * (c) Copyright 2014 WibiData, Inc.
  *
  * See the NOTICE file distributed with this work for additional
  * information regarding copyright ownership.
@@ -18,22 +18,61 @@
  */
 package org.kiji.express.flow.framework
 
-import cascading.scheme.{SinkCall, SourceCall}
-import java.io.{OutputStream, InputStream}
+import java.io.OutputStream
+import java.io.InputStream
 import java.util.Properties
-import org.kiji.express.flow._
-import org.kiji.schema.{KijiRowData, EntityIdFactory, KijiTable, KijiURI}
-import cascading.flow.FlowProcess
-import cascading.tap.Tap
-import org.apache.hadoop.mapred.JobConf
-import cascading.flow.hadoop.util.HadoopUtil
-import org.apache.hadoop.hbase.HBaseConfiguration
-import org.kiji.express.flow.util.ResourceUtil._
-import scala.Some
-import org.kiji.schema.KijiTableReader.KijiScannerOptions
-import scala.collection.JavaConverters.asScalaIteratorConverter
-import cascading.tuple.Tuple
 
+import scala.Some
+import scala.collection.JavaConverters.asScalaIteratorConverter
+
+import cascading.scheme.SinkCall
+import cascading.scheme.SourceCall
+import cascading.flow.FlowProcess
+import cascading.tuple.Tuple
+import cascading.flow.hadoop.util.HadoopUtil
+import org.apache.hadoop.mapred.JobConf
+import org.apache.hadoop.hbase.HBaseConfiguration
+
+import org.kiji.schema.EntityIdFactory
+import org.kiji.schema.KijiRowData
+import org.kiji.schema.KijiTable
+import org.kiji.schema.KijiURI
+import org.kiji.express.flow.ExpressColumnOutput
+import org.kiji.express.flow.ColumnInputSpec
+import org.kiji.express.flow.RowRangeSpec
+import org.kiji.express.flow.RowFilterSpec
+import org.kiji.express.flow.TimeRangeSpec
+import org.kiji.express.flow.util.ResourceUtil.withKijiTable
+import org.kiji.schema.KijiTableReader.KijiScannerOptions
+
+
+/**
+ * A local version of [[org.kiji.express.flow.framework.TypedKijiScheme]] that is meant to be used
+ * with Cascading's local job runner.
+ *
+ * [[TypedLocalKijiScheme]] extends trait [[org.kiji.express.flow.framework.BaseLocalKijiScheme]]
+ * which holds method implementations of [[cascading.scheme.Scheme]] that are common to both
+ * [[LocalKijiScheme]] and [[TypedLocalKijiScheme]] for running jobs locally.
+ *
+ * This scheme is meant to be used with [[org.kiji.express.flow.framework.LocalKijiTap]] and
+ * Cascading's local job runner. Jobs run with Cascading's local job runner execute on
+ * your local machine instead of a cluster. This can be helpful for testing or quick jobs.
+ *
+ * This scheme is responsible for converting rows from a Kiji table that are input to a Cascading
+ * flow into Cascading tuples
+ * (see* `source(cascading.flow.FlowProcess, cascading.scheme.SourceCall)`)
+ * and writing output data from a Cascading flow to a Kiji table
+ * (see `sink(cascading.flow.FlowProcess, cascading.scheme.SinkCall)`).
+ *
+ * @see[[org.kiji.express.flow.framework.TypedKijiScheme]]
+ * @see[[org.kiji.express.flow.framework.BaseLocalKijiScheme]]
+ *
+ * @param uri of table to be written to.
+ * @param timeRange to include from the Kiji table.Use None if all values should be written
+ *     at the current time.
+ * @param inputColumns is a one-to-one mapping from field names to Kiji columns. The columns in the
+ *     map will be read into their associated tuple fields.
+ */
 private[express] case class TypedLocalKijiScheme(
   private[express] val uri: KijiURI,
   private[express] val timeRange: TimeRangeSpec,
@@ -69,15 +108,12 @@ private[express] case class TypedLocalKijiScheme(
     }
   }
 
-
-  override def sourceConfInit(
-    process: FlowProcess[Properties],
-    tap: Tap[Properties, InputStream, OutputStream],
-    conf: Properties) {
-    // No-op. Setting options in a java Properties object is not going to help us read from
-    // a Kiji table.
-  }
-
+  /**
+   * Sets up any resources required to read from a Kiji table.
+   *
+   * @param process currently being run.
+   * @param sourceCall containing the context for this source.
+   */
   override def sourcePrepare(
     process: FlowProcess[Properties],
     sourceCall: SourceCall[InputContext, InputStream]) {
@@ -137,7 +173,10 @@ private[express] case class TypedLocalKijiScheme(
   }
 
   /**
-   * Converts and writes a Cascading Tuple to a Kiji table.
+   * Converts and writes a Cascading Tuple to a Kiji table. The input type to the sink is expected
+   * to be either a [[org.kiji.express.flow.ExpressColumnOutput]] object, or a Tuple of multiple
+   * ExpressColumnOutput objects where each element in the tuple corresponds to a column of
+   * the Kiji table.
    *
    * @param process Current Cascading flow being run.
    * @param sinkCall Object containing the context for this source.

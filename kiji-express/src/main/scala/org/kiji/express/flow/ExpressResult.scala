@@ -18,15 +18,20 @@
  */
 package org.kiji.express.flow
 
-import org.kiji.schema._
 import scala.collection.JavaConversions.asScalaIterator
 
+import org.kiji.schema.KijiCell
+import org.kiji.schema.KijiRowData
+
 /**
- * Default data typed for the typed implementation fof KijiExpress.
+ * A wrapper class around [[org.kiji.schema.KijiRowData]] that contains methods to retrieve and
+ * iterate through the data. This class is used as the type for
+ * [[com.twitter.scalding.typed.TypedPipe]] received from [[org.kiji.express.flow.TypedKijiSource]]
+ * for the type safe API.
  *
- * @param row is a [[KijiRowData]] object.
+ * @param row of the requested data from the Kiji table.
  */
-class ExpressResult(row: KijiRowData) {
+final class ExpressResult(row: KijiRowData) {
 
   /**
    * Fetch the [[EntityId]] for the row.
@@ -79,8 +84,8 @@ class ExpressResult(row: KijiRowData) {
 }
 
 /**
- * Wrapper around the iterators returned from [[KijiRowData]] to simplify the java <-> scala
- * conversions.
+ * Wrapper around the iterators received from [[KijiRowData]] to simplify the java <-> scala
+ * conversions from a [[KijiCell]] to [[FlowCell]].
  *
  * @param resultIterator is the iterator from [[KijiRowData]] methods.
  * @tparam T is the type of the datum contained in [[KijiCell]].
@@ -95,7 +100,16 @@ final private[express] case class ExpressResultIterator[T](resultIterator: Itera
   override def next(): FlowCell[T] = FlowCell(resultIterator.next())
 }
 
+/**
+ * Companion object for the ExpressResult class.
+ */
 object ExpressResult {
+  /**
+   * Creates and returns an instance of ExpressResult.
+   *
+   * @param rowData is a row of requested data from Kiji Table.
+   * @return an instance of ExpressResult for the specified row.
+   */
   def apply(rowData: KijiRowData): ExpressResult = new ExpressResult(rowData)
 }
 

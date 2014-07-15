@@ -18,36 +18,51 @@
  */
 package org.kiji.express.flow
 
-import com.twitter.scalding._
+
 import cascading.tap.Tap
-import org.kiji.express.flow.framework._
-import org.kiji.schema._
+
 import com.google.common.base.Objects
 
-import scala.collection.JavaConverters.asScalaIteratorConverter
-import scala.collection.mutable
-import cascading.tuple.{TupleEntry, Tuple}
-import cascading.flow.FlowProcess
-import cascading.scheme.SinkCall
-import java.util.Properties
-import org.kiji.express.flow.util.ResourceUtil._
-import java.io.OutputStream
-import org.apache.hadoop.mapred.JobConf
-import cascading.flow.hadoop.util.HadoopUtil
-import org.apache.hadoop.hbase.HBaseConfiguration
-import org.kiji.schema.KijiTableReader.KijiScannerOptions
-import scala.collection.mutable.Buffer
-import org.apache.hadoop.conf.Configuration
-import com.twitter.scalding.Test
-import scala.Some
-import org.kiji.express.flow.framework.DirectKijiSinkContext
+import com.twitter.scalding.AccessMode
 import com.twitter.scalding.Hdfs
+import com.twitter.scalding.Mappable
+import com.twitter.scalding.Mode
+import com.twitter.scalding.Local
+import com.twitter.scalding.TupleConverter
+import com.twitter.scalding.TupleSetter
+import com.twitter.scalding.typed.TypedSink
+
+import org.kiji.schema.KijiURI
+import org.kiji.express.flow.framework.KijiTap
+import org.kiji.express.flow.framework.LocalKijiTap
+import org.kiji.express.flow.framework.TypedKijiScheme
 import org.kiji.express.flow.framework.TypedLocalKijiScheme
-import org.kiji.schema.{EntityId => JEntityId}
 
 /**
- * TypedKijiSource is a TypeSafe representation of [[KijiSource]]. This class extends [[.Mappable]]
- * to allow compile time type checking in accordance with scalding's type safe API.
+ * TypedKijiSource is a type safe representation of [[KijiSource]]. This class extends the
+ * [[Mappable]] trait in scalding to allow compile time type checking.
+ *
+ * When reading from a Kiji table, a `TypedKijiSource` will provide a view of the KijiTable as a
+ * collection of tuples that correspond to rows from the Kiji Table. The columns that need to be
+ * read can be configured along with the time spans that cells retrieved must belong to.
+ * Each retrieved row is wrapped in a [[ExpressResult]] object which contains methods to
+ * allow access to the row data.
+ *
+ * When writing to a Kiji table, a `TypedKijiSource` expects the value in the TypedPipe to be
+ * either the type [[ExpressColumnOutput]] or a scalding Tuple of multiple[[ExpressColumnOutput]].
+ * The [[ExpressColumnOutput]] object contains the [[EntityId]] and other identifying information
+ * which is used to determine where the data is stored in the KijiTable.
+ *
+ * [[TypedKijiSource]] extends both [[Mappable]] and [[TypedSink]] because it is used as both the
+ * source and sink while reading to, and writing from a TypedPipe to a Kiji table. [[Mappable]]
+ * requires the type parameter to be present in the co-variant position and [[TypedSink]] requires
+ * it to be present in the contra-variant position. Although, since for the type safe API we force
+ * the columns read from Kiji table to a [[ExpressResult]] type, we do not need the type to exist as
+ * co-variant. Hence, the type for [[TypedKijiSource]] is specified in a contra-variant
+ * position.
+ *
+ * End-users cannot directly obtain instances of `TypedKijiSource`. Instead,
+ * they should use the factory methods provided as part of the [[org.kiji.express.flow]] module.
  *
  * @param tableAddress is a Kiji URI addressing the Kiji table to read or write to.
  * @param timeRange that cells read must belong to. Ignored when the source is used to write.
@@ -55,6 +70,8 @@ import org.kiji.schema.{EntityId => JEntityId}
  *                     map will be read into their associated tuple fields.
  * @param rowRangeSpec is the specification for which interval of rows to scan.
  * @param rowFilterSpec is the specification for which row filter to apply.
+ * @param conv is the tuple converter definition passed in implicitly.
+ * @param tset is the tuple setter definition passed in implicitly.
  * @tparam T is the type of value from the source.
  */
 sealed class TypedKijiSource[-T](
@@ -66,11 +83,22 @@ sealed class TypedKijiSource[-T](
   )(implicit conv: TupleConverter[ExpressResult], tset: TupleSetter[T])
   extends Mappable[ExpressResult] with TypedSink[T] {
 
-  import TypedKijiSource._
-
+  /**
+   * Default implementation of a converter method that returns a [[TupleConverter]] for the super
+    * type of [[ExpressResult]].
+    *
+    * @tparam U is the type parameter for the [[TupleConverter]] returned.
+    * @return the [[TupleConverter]] object with the new type.
+    */
   override def converter[U >: ExpressResult]: TupleConverter[U] =
     TupleConverter.asSuperConverter[ExpressResult, U](conv)
 
+  /**
+   * Default implementation of a converter method that returns a [[TupleSetter]] for the subtype of
+   * type T
+   * @tparam U is the type parameter for the [[TupleSetter]] returned.
+   * @return the [[TupleSetter]] object with the new type.
+   */
   override def setter[U <: T]: TupleSetter[U] = TupleSetter.asSubSetter[T, U](tset)
 
   private val uri: KijiURI = KijiURI.newBuilder(tableAddress).build()
@@ -95,26 +123,18 @@ sealed class TypedKijiSource[-T](
       rowFilterSpec
     )
 
-
+  /**
+   * Create a connection to the physical data source (also known as a Tap in Cascading)
+   * which, in this case, is a [[org.kiji.schema.KijiTable]].
+   *
+   * @param readOrWrite Specifies if this source is to be used for reading or writing.
+   * @param mode Specifies which job runner/flow planner is being used.
+   * @return A tap to use for this data source.
+   */
   override def createTap(readOrWrite: AccessMode)(implicit mode: Mode): Tap[_, _, _] = {
     mode match {
       case Hdfs(_, _) => new KijiTap(uri, typedKijiScheme).asInstanceOf[Tap[_, _, _]]
       case Local(_) => new LocalKijiTap(uri, typedLocalKijiScheme).asInstanceOf[Tap[_, _, _]]
-
-      case Test(buffers) => readOrWrite match {
-        // Use Kiji's local tap and scheme when reading.
-        case Read => {
-          val scheme = typedLocalKijiScheme
-          populateTestTable(
-            uri,
-            inputColumns,
-            buffers(this),
-            HBaseConfiguration.create())
-
-          new LocalKijiTap(uri, scheme).asInstanceOf[Tap[_, _, _]]
-        }
-      }
-
       case _ => throw new RuntimeException("Trying to create invalid tap")
     }
   }
@@ -146,163 +166,4 @@ sealed class TypedKijiSource[-T](
       timeRange,
       rowRangeSpec,
       rowFilterSpec)
-}
-
-object TypedKijiSource {
-  private[express] def newGetAllData(col: ColumnInputSpec): ColumnInputSpec = {
-    ColumnInputSpec(
-      col.columnName.toString,
-      Integer.MAX_VALUE,
-      col.filterSpec,
-      col.pagingSpec,
-      col.schemaSpec)
-  }
-
-  /**
-   * Returns a map from field name to column input spec where the column input spec has been
-   * configured as an output column.
-   *
-   * This is used in tests, when we use KijiScheme to read tuples from a Kiji table, and we want
-   * to read all data in all of the columns, so the test can inspect all data in the table.
-   *
-   * @param columns to transform.
-   * @return transformed map where the column input specs are configured for output.
-   */
-  private def inputColumnSpecifyAllData(
-    columns: List[ColumnInputSpec]): List[ColumnInputSpec] = {
-    columns.map(newGetAllData)
-      // Need this to make the Map serializable (issue with mapValues)
-      .map(identity)
-  }
-
-  // Test specific code below here.
-  /**
-   * Takes a buffer containing rows and writes them to the table at the specified uri.
-   *
-   * @param tableUri of the table to populate.
-   * @param rows Tuples to write to populate the table with.
-   * @param configuration defining the cluster to use.
-   */
-
-  //TODO: Reimplement for the wrapper of KijiRowData.
-  private def populateTestTable(
-    tableUri: KijiURI,
-    inputColumns: List[ColumnInputSpec],
-    rows: Option[Buffer[Tuple]],
-    configuration: Configuration) {
-
-    doAndRelease(Kiji.Factory.open(tableUri)) { kiji: Kiji =>
-      // Layout to get the default reader schemas from.
-      val layout = withKijiTable(tableUri, configuration) { table: KijiTable =>
-        table.getLayout
-
-      }
-      val eidFactory = EntityIdFactory.getFactory(layout)
-
-      // Write the desired rows to the table.
-      withKijiTableWriter(tableUri, configuration) { writer: KijiTableWriter =>
-    rows.toSeq.flatten.foreach { row: Tuple =>
-      val tupleEntry = new TupleEntry(row)
-      val rowData: ExpressResult = tupleEntry.getObject(0).asInstanceOf[ExpressResult]
-      val entityId: JEntityId = EntityIdFactory.getFactory(layout).getEntityId(rowData.toString)
-
-      inputColumns.foreach {
-        inputColumnSpec: ColumnInputSpec =>
-          rowData.cellsIterator(
-              inputColumnSpec.columnName.getFamily,
-              inputColumnSpec.columnName.getQualifier
-          ).map {
-            cell: FlowCell[_] => writer.put(entityId,
-              inputColumnSpec.columnName.getFamily,
-              inputColumnSpec.columnName.getQualifier,
-              cell
-            )
-          }
-      }
-    }
-  }
-}
-}
-
-
-/**
- * A [[TypedLocalKijiScheme]] that loads rows in a table into the provided buffer. This class
- * should only be used during tests.
- *
- * @param buffer to fill with post-job table rows for tests.
- * @param timeRange of timestamps to read from each column.
- * @param inputColumns is a map of Scalding field name to ColumnInputSpec.
- * @param rowRangeSpec is the specification for which interval of rows to scan.
- * @param rowFilterSpec is the specification for which row filter to apply.
- */
-private class TestTypedLocalKijiScheme(
-  val buffer: Option[mutable.Buffer[Tuple]],
-  uri: KijiURI,
-  timeRange: TimeRangeSpec,
-  inputColumns: List[ColumnInputSpec],
-  rowRangeSpec: RowRangeSpec,
-    rowFilterSpec: RowFilterSpec)
-    extends TypedLocalKijiScheme(
-      uri,
-      timeRange,
-      inputColumnSpecifyAllData(inputColumns),
-      rowRangeSpec,
-      rowFilterSpec) {
-    override def sinkCleanup(
-      process: FlowProcess[Properties],
-      sinkCall: SinkCall[DirectKijiSinkContext, OutputStream]) {
-      // flush table writer
-      sinkCall.getContext.writer.flush()
-      // Store the output table.
-      val conf: JobConf =
-        HadoopUtil.createJobConf(process.getConfigCopy, new JobConf(HBaseConfiguration.create()))
-
-      // Read table into buffer.
-      withKijiTable(uri, conf) { table: KijiTable =>
-        // We also want the entire time range, so the test can inspect all data in the table.
-        val request: KijiDataRequest =
-          BaseKijiScheme.buildRequest(table.getLayout, TimeRangeSpec.All, inputColumns)
-
-        doAndClose(BaseLocalKijiScheme.openReaderWithOverrides(table, request)) { reader =>
-          // Set up scanning options.
-          val eidFactory = EntityIdFactory.getFactory(table.getLayout)
-          val scannerOptions = new KijiScannerOptions()
-          scannerOptions.setKijiRowFilter(
-            rowFilterSpec.toKijiRowFilter.getOrElse(null))
-          scannerOptions.setStartRow(
-            rowRangeSpec.startEntityId match {
-              case Some(entityId) => entityId.toJavaEntityId(eidFactory)
-              case None => null
-            }
-          )
-          scannerOptions.setStopRow(
-            rowRangeSpec.limitEntityId match {
-              case Some(entityId) => entityId.toJavaEntityId(eidFactory)
-              case None => null
-            }
-          )
-          doAndClose(reader.getScanner(request, scannerOptions)) { scanner: KijiRowScanner =>
-            scanner.iterator().asScala.foreach { row: KijiRowData =>
-              val tuple = TypedKijiScheme.rowToTuple(row)
-
-              val newTupleValues = tuple
-                .iterator()
-                .asScala
-                .map {
-                // This converts stream into a list to force the stream to compute all of the
-                // transformations that have been applied lazily to it. This is necessary
-                // because some of the transformations applied in KijiScheme#rowToTuple have
-                // dependencies on an open connection to a schema table.
-                case stream: Stream[_] => stream.toList
-                case x => x
-              }.toSeq
-
-              buffer.foreach {_ += new Tuple(newTupleValues: _*)}
-            }
-          }
-        }
-      }
-      super.sinkCleanup(process, sinkCall)
-    }
-  }
 }

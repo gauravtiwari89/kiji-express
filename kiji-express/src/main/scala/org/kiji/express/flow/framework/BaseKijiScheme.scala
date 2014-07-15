@@ -1,5 +1,5 @@
 /**
- * (c) Copyright 2013 WibiData, Inc.
+ * (c) Copyright 2014 WibiData, Inc.
  *
  * See the NOTICE file distributed with this work for additional
  * information regarding copyright ownership.
@@ -18,47 +18,54 @@
  */
 package org.kiji.express.flow.framework
 
-import cascading.scheme.{SinkCall, SourceCall, Scheme}
-import org.apache.hadoop.mapred.{OutputCollector, RecordReader, JobConf}
-import org.kiji.schema.{EntityId => JEntityId, _}
-import cascading.flow.FlowProcess
-import org.kiji.schema.layout.{ColumnReaderSpec, KijiTableLayout}
-import org.kiji.schema.filter.KijiColumnFilter
-import org.kiji.schema.avro.SchemaType
-import org.kiji.annotations.{ApiStability, ApiAudience}
-import cascading.tap.Tap
-import org.kiji.express.flow.util.ResourceUtil._
-import org.kiji.mapreduce.framework.KijiConfKeys
-import org.apache.commons.codec.binary.Base64
-import org.kiji.express.flow._
 import scala.Some
+import org.apache.hadoop.mapred.OutputCollector
+import org.apache.hadoop.mapred.RecordReader
+import org.apache.hadoop.mapred.JobConf
+import org.apache.commons.codec.binary.Base64
 
+import cascading.flow.FlowProcess
+import cascading.tap.Tap
+import cascading.scheme.SinkCall
+import cascading.scheme.SourceCall
+import cascading.scheme.Scheme
+
+import org.kiji.annotations.ApiStability
+import org.kiji.annotations.ApiAudience
+import org.kiji.schema.KijiRowData
+import org.kiji.mapreduce.framework.KijiConfKeys
+import org.kiji.schema.avro.SchemaType
+import org.kiji.schema.filter.KijiColumnFilter
+import org.kiji.schema.layout.ColumnReaderSpec
+import org.kiji.schema.layout.KijiTableLayout
+
+import org.kiji.express.flow.ColumnFamilyInputSpec
+import org.kiji.express.flow.ColumnInputSpec
+import org.kiji.express.flow.SchemaSpec
+import org.kiji.express.flow.RowRangeSpec
+import org.kiji.express.flow.RowFilterSpec
+import org.kiji.express.flow.TimeRangeSpec
+import org.kiji.express.flow.QualifiedColumnInputSpec
+import org.kiji.schema.{EntityId => JEntityId}
+import org.kiji.schema.EntityIdFactory
+import org.kiji.schema.KijiDataRequest
+import org.kiji.schema.KijiDataRequestBuilder
+import org.kiji.schema.KijiBufferedWriter
+import org.kiji.schema.KijiURI
+import org.kiji.express.flow.util.ResourceUtil.withKijiTable
+
+/**
+ * A Base trait containing Kiji-specific implementation of a Cascading `Scheme` that is common for
+ * both the Fields API, and the Type-safe API. Scheme's [[KijiScheme]] and [[TypedKijiScheme]]
+ * extend this trait and share the implemented methods.
+ */
 trait BaseKijiScheme extends Scheme[
   JobConf,
   RecordReader[Container[JEntityId], Container[KijiRowData]],
   OutputCollector[_, _],
   KijiSourceContext,
   DirectKijiSinkContext
-  ]{
-
-
-
-  /**
-   * Cleans up any resources used during the MapReduce job. This method is called
-   * on the cluster.
-   *
-   * @param flow currently being run.
-   * @param sourceCall containing the context for this source.
-   */
-  override def sourceCleanup(
-    flow: FlowProcess[JobConf],
-    sourceCall: SourceCall[
-      KijiSourceContext,
-      RecordReader[Container[JEntityId], Container[KijiRowData]]
-      ]
-    ) {
-    sourceCall.setContext(null)
-  }
+  ] {
 
   /**
    * Sets up any resources required for the MapReduce job. This method is called on the cluster.
@@ -77,6 +84,22 @@ trait BaseKijiScheme extends Scheme[
     sourceCall.setContext(KijiSourceContext(sourceCall.getInput.createValue()))
   }
 
+  /**
+   * Cleans up any resources used during the MapReduce job. This method is called
+   * on the cluster.
+   *
+   * @param flow currently being run.
+   * @param sourceCall containing the context for this source.
+   */
+  override def sourceCleanup(
+    flow: FlowProcess[JobConf],
+    sourceCall: SourceCall[
+      KijiSourceContext,
+      RecordReader[Container[JEntityId], Container[KijiRowData]]
+      ]
+    ) {
+    sourceCall.setContext(null)
+  }
 
   /**
    * Sets any configuration options that are required for running a MapReduce job
@@ -99,9 +122,6 @@ trait BaseKijiScheme extends Scheme[
     // No-op since no configuration parameters need to be set to encode data for Kiji.
   }
 
-
-
-
   /**
    * Cleans up any resources used during the MapReduce job. This method is called on the cluster.
    *
@@ -117,45 +137,54 @@ trait BaseKijiScheme extends Scheme[
     sinkCall.setContext(null)
   }
 
+  /**
+   * Sets configuration parameters for a KijiDataRequest for the purpose of reading from a Kiji
+   * table.
+   *
+   * @param uri is the uri for the target table.
+   * @param conf is configuration to which the datarequest is added.
+   * @param rowRangeSpec specifies the row range for the request.
+   * @param rowFilterSpec specifies the filters for the request.
+   */
   def configureRequest(
-    uri:KijiURI,
-    conf:JobConf,
+    uri: KijiURI,
+    conf: JobConf,
     rowRangeSpec: RowRangeSpec,
-    rowFilterSpec:RowFilterSpec
-  ){
+    rowFilterSpec: RowFilterSpec
+    ) {
     val eidFactory = withKijiTable(uri, conf) { table =>
-      EntityIdFactory.getFactory(table.getLayout())
+      EntityIdFactory.getFactory(table.getLayout)
     }
     // Set start entity id.
     rowRangeSpec.startEntityId match {
-      case Some(entityId) => {
+      case Some(entityId) =>
         conf.set(
           KijiConfKeys.KIJI_START_ROW_KEY,
           Base64.encodeBase64String(
-            entityId.toJavaEntityId(eidFactory).getHBaseRowKey()))
-      }
-      case None => {}
+            entityId.toJavaEntityId(eidFactory).getHBaseRowKey))
+      case None => //Do Nothing
     }
     // Set limit entity id.
     rowRangeSpec.limitEntityId match {
-      case Some(entityId) => {
+      case Some(entityId) =>
         conf.set(
           KijiConfKeys.KIJI_LIMIT_ROW_KEY,
           Base64.encodeBase64String(
-            entityId.toJavaEntityId(eidFactory).getHBaseRowKey()))
-      }
-      case None => {}
+            entityId.toJavaEntityId(eidFactory).getHBaseRowKey))
+      case None => //Do Nothing
     }
     // Set row filter.
     rowFilterSpec.toKijiRowFilter match {
-      case Some(kijiRowFilter) => {
+      case Some(kijiRowFilter) =>
         conf.set(KijiConfKeys.KIJI_ROW_FILTER, kijiRowFilter.toJson.toString)
-      }
-      case None => {}
+      case None => //Do Nothing
     }
   }
 }
 
+/**
+ * Companion object for the [[BaseKijiScheme]].
+ */
 object BaseKijiScheme {
 
   /** Hadoop mapred counter group for KijiExpress. */
@@ -229,7 +258,6 @@ object BaseKijiScheme {
           }
         }
       }
-
       builder.newColumnsDef()
         .withMaxVersions(column.maxVersions)
         .withFilter(kijiFilter)
@@ -243,7 +271,6 @@ object BaseKijiScheme {
     columns.foreach(column => addColumn(requestBuilder, column))
     requestBuilder.build()
   }
-
 }
 
 /**

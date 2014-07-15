@@ -56,8 +56,12 @@ import org.kiji.schema.MapFamilyVersionIterator
 import org.kiji.schema.{EntityId => JEntityId}
 
 /**
- * A Kiji-specific implementation of a Cascading `Scheme`, which defines how to read and write the
- * data stored in a Kiji table.
+ * A Kiji-specific implementation of a Cascading `Scheme` for the fields API, which defines how to
+ * read and write the data stored in a Kiji table.
+ *
+ * [[KijiScheme]] extends trait [[org.kiji.express.flow.framework.BaseKijiScheme]], which holds
+ * method implementations of [[cascading.scheme.Scheme]] that are common to both [[KijiScheme]]
+ * and [[TypedKijiScheme]] for running mapreduce jobs.
  *
  * KijiScheme is responsible for converting rows from a Kiji table that are input to a Cascading
  * flow into Cascading tuples
@@ -66,8 +70,10 @@ import org.kiji.schema.{EntityId => JEntityId}
  * (see `sink(cascading.flow.FlowProcess, cascading.scheme.SinkCall)`).
  *
  * KijiScheme must be used with [[org.kiji.express.flow.framework.KijiTap]],
- * since it expects the Tap to have access to a Kiji table.  [[org.kiji.express.flow.KijiSource]]
+ * since it expects the Tap to have access to a Kiji table. [[org.kiji.express.flow.KijiSource]]
  * handles the creation of both KijiScheme and KijiTap in KijiExpress.
+ *
+ * @see[[org.kiji.express.flow.framework.BaseKijiScheme]]
  *
  * @param tableAddress of the target Kiji table.
  * @param timeRange to include from the Kiji table.
@@ -134,7 +140,6 @@ class KijiScheme(
         Base64.encodeBase64String(SerializationUtils.serialize(request)))
   }
 
-
   /**
    * Reads and converts a row from a Kiji table to a Cascading Tuple. This method
    * is called once for each row on the cluster.
@@ -191,7 +196,6 @@ class KijiScheme(
           table.getWriterFactory.openBufferedWriter()))
     }
   }
-
 
   /**
    * Converts and writes a Cascading Tuple to a Kiji table. This method is called once

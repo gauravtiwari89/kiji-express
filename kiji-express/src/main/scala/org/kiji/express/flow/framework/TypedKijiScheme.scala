@@ -45,7 +45,32 @@ import org.kiji.mapreduce.framework.KijiConfKeys
 import org.kiji.express.flow.framework.serialization.KijiKryoExternalizer
 import org.kiji.express.flow.util.ResourceUtil.withKijiTable
 
-
+/**
+ * A Kiji-specific implementation of a Cascading `Scheme` for the scalding type safe API, that
+ * defines how to read and write the data in a Kiji table.
+ *
+ * [[TypedKijiScheme]] extends trait [[org.kiji.express.flow.framework.BaseKijiScheme]], which holds
+ * method implementations of [[cascading.scheme.Scheme]] that are common to both [[KijiScheme]]
+ * and [[TypedKijiScheme]] for running mapreduce jobs.
+ *
+ * [[TypedKijiScheme]] is responsible for converting rows from a Kiji table that are input into a
+ * Cascading flow into Cascading tuples
+ * (see `source(cascading.flow.FlowProcess, cascading.scheme.SourceCall)`) and writing output
+ * data from a Cascading flow to a Kiji table
+ * (see `sink(cascading.flow.FlowProcess, cascading.scheme.SinkCall)`).
+ *
+ * [[TypedKijiScheme]] must be used with [[org.kiji.express.flow.framework.KijiTap]], since it
+ * expects the Tap to have access to a Kiji table. [[org.kiji.express.flow.TypedKijiSource]] handles
+ * the creation of both [[TypedKijiScheme]] and [[KijiTap]] in KijiExpress.
+ *
+ * @see[[org.kiji.express.flow.framework.BaseKijiScheme]]
+ *
+ * @param tableAddress of the target Kiji table.
+ * @param timeRange to include from the Kiji table.
+ * @param icolumns a list of ColumnInputSpecs from where the data is to be read.
+ * @param rowRangeSpec  specifies the row range for the input.
+ * @param rowFilterSpec specifies the filters for the input.
+ */
 class TypedKijiScheme(
   private[express] val tableAddress: String,
   private[express] val timeRange: TimeRangeSpec,
@@ -53,19 +78,21 @@ class TypedKijiScheme(
   private[express] val rowRangeSpec: RowRangeSpec,
   private[express] val rowFilterSpec: RowFilterSpec
   ) extends BaseKijiScheme {
-
   import TypedKijiScheme._
 
+  //TODO does the typed implementation require the KryoSerializer?
   private[this] val _inputColumns = KijiKryoExternalizer(icolumns)
 
   def inputColumns: List[ColumnInputSpec] = _inputColumns.get
   private def uri: KijiURI = KijiURI.newBuilder(tableAddress).build()
 
   /**
+   * Sets any configuration options that are required for running a MapReduce job that reads from a
+   * Kiji table. This method gets called on the client machine during job setup.
    *
-   * @param flow
-   * @param tap
-   * @param conf
+   * @param flow being built.
+   * @param tap that is being used with this scheme.
+   * @param conf to which we will add our KijiDataRequest.
    */
   override def sourceConfInit(
     flow: FlowProcess[JobConf],
@@ -89,10 +116,13 @@ class TypedKijiScheme(
   }
 
   /**
+   * Reads and converts a row from a Kiji table to a Cascading Tuple. This method
+   * is called once for each row on the cluster.
    *
-   * @param flow
-   * @param sourceCall
-   * @return
+   * @param flow is the current Cascading flow being run.
+   * @param sourceCall containing the context for this source.
+   * @return `true` if another row was read and it was converted to a tuple,
+   *     `false` if there were no more rows to read.
    */
   override def source(
     flow: FlowProcess[JobConf],
@@ -119,10 +149,12 @@ class TypedKijiScheme(
   }
 
   /**
-   *
-   * @param flow
-   * @param sinkCall
-   */
+  * Sets up any resources required for the MapReduce job. This method is called
+  * on the cluster.
+  *
+  * @param flow is the current Cascading flow being run.
+  * @param sinkCall containing the context for this source.
+  */
   override def sinkPrepare(
     flow: FlowProcess[JobConf],
     sinkCall: SinkCall[DirectKijiSinkContext, OutputCollector[_, _]]
@@ -137,15 +169,16 @@ class TypedKijiScheme(
   }
 
   /**
+   * Converts and writes a Cascading Tuple to a Kiji table. This method is called once
+   * for each row on the cluster, so it should be kept as light as possible.
    *
-   * @param flow
-   * @param sinkCall
+   * @param flow is the current Cascading flow being run.
+   * @param sinkCall containing the context for this source.
    */
   override def sink(
     flow: FlowProcess[JobConf],
     sinkCall: SinkCall[DirectKijiSinkContext, OutputCollector[_, _]]
     ): Unit = {
-
     val DirectKijiSinkContext(eidFactory, writer) = sinkCall.getContext
     //The first object in tuple entry contains the data in the pipe.
     val typedPipeVal: Product = sinkCall.getOutgoingEntry.getObject(0).asInstanceOf[Product]
@@ -177,6 +210,18 @@ class TypedKijiScheme(
  * Companion object for [[TypedKijiScheme]] containing utility methods.
  */
 object TypedKijiScheme {
+
+  /**
+   * Converts a row of requested data from KijiTable to a cascading Tuple.
+   *
+   * The row of results is wrapped in a [[org.kiji.express.flow.ExpressResult]] object before adding
+   * it to the cascading tuple. ExpressResult contains methods to access and retrieve the row data.
+   * The wrapping of row data is done to enforce a [[ExpressResult]] type for all tuples being read
+   * from [[org.kiji.express.flow.TypedKijiSource]] for the type safe api.
+   *
+   * @param row to convert to a tuple.
+   * @return a tuple containing the requested values from row.
+   */
   private[express] def rowToTuple(row: KijiRowData): Tuple = {
     val result: Tuple = new Tuple()
     result.add(ExpressResult(row))
