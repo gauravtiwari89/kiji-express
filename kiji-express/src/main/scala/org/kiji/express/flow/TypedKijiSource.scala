@@ -54,13 +54,12 @@ import org.kiji.express.flow.framework.TypedLocalKijiScheme
  * The [[ExpressColumnOutput]] object contains the [[EntityId]] and other identifying information
  * which is used to determine where the data is stored in the KijiTable.
  *
- * [[TypedKijiSource]] extends both [[Mappable]] and [[TypedSink]] because it is used as both the
- * source and sink while reading to, and writing from a TypedPipe to a Kiji table. [[Mappable]]
- * requires the type parameter to be present in the co-variant position and [[TypedSink]] requires
- * it to be present in the contra-variant position. Although, since for the type safe API we force
- * the columns read from Kiji table to a [[ExpressResult]] type, we do not need the type to exist as
- * co-variant. Hence, the type for [[TypedKijiSource]] is specified in a contra-variant
- * position.
+ * [[TypedKijiSource]] extends both [[Mappable]] and [[TypedSink]] as it is used as both, the
+ * source and the sink. [[Mappable]] requires the type parameter T to be present in the co-variant
+ * position for the TupleConverter and [[TypedSink]] requires it to be present as contra-variant
+ * for the TupleSetter. But since we force a type of [[ExpressResult]] for reads from the Kiji table
+ * we require the type parameter to exist only for the TupleSetter. Hence, the type here is
+ * specified in a contra-variant position.
  *
  * End-users cannot directly obtain instances of `TypedKijiSource`. Instead,
  * they should use the factory methods provided as part of the [[org.kiji.express.flow]] module.
