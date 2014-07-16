@@ -680,7 +680,7 @@ object ColumnFamilyOutputSpec {
  *   preExistingPipe.map{existingTuple: (EntityId, Long) =>
  *      val (entityId, value) = existingTuple
  *      ExpressColumn(entityId, "myFamily", "myQualifier", value)
- *   }.write(KijiOutput.typedBuilder.withTableURI("kiji://.env/mytable").build)
+ *   }.write(KijiOutput.typedSinkForTable("kiji://.env/mytable"))
  * }}}
  *
  * or it could be a scala tuple of multiple ExpressColumnOutput objects:
@@ -701,7 +701,7 @@ object ColumnFamilyOutputSpec {
  *       )
  *
  *      (col1, col2)
- *   }.write(KijiOutput.typedBuilder.withTableURI("kiji://.env/mytable").build)
+ *   }.write(KijiOutput.typedSinkForTable("kiji://.env/mytable").build)
  *
  * }}}
  *

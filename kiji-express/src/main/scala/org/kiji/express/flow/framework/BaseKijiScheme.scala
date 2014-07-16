@@ -60,12 +60,11 @@ import org.kiji.express.flow.util.ResourceUtil.withKijiTable
  * extend this trait and share the implemented methods.
  */
 trait BaseKijiScheme extends Scheme[
-  JobConf,
-  RecordReader[Container[JEntityId], Container[KijiRowData]],
-  OutputCollector[_, _],
-  KijiSourceContext,
-  DirectKijiSinkContext
-  ] {
+    JobConf,
+    RecordReader[Container[JEntityId], Container[KijiRowData]],
+    OutputCollector[_, _],
+    KijiSourceContext,
+    DirectKijiSinkContext] {
 
   /**
    * Sets up any resources required for the MapReduce job. This method is called on the cluster.
@@ -74,12 +73,10 @@ trait BaseKijiScheme extends Scheme[
    * @param sourceCall containing the context for this source.
    */
   override def sourcePrepare(
-    flow: FlowProcess[JobConf],
-    sourceCall: SourceCall[
-      KijiSourceContext,
-      RecordReader[Container[JEntityId], Container[KijiRowData]]
-      ]
-    ) {
+      flow: FlowProcess[JobConf],
+      sourceCall: SourceCall[
+          KijiSourceContext,
+          RecordReader[Container[JEntityId], Container[KijiRowData]]]) {
     // Set the context used when reading data from the source.
     sourceCall.setContext(KijiSourceContext(sourceCall.getInput.createValue()))
   }
@@ -92,12 +89,10 @@ trait BaseKijiScheme extends Scheme[
    * @param sourceCall containing the context for this source.
    */
   override def sourceCleanup(
-    flow: FlowProcess[JobConf],
-    sourceCall: SourceCall[
-      KijiSourceContext,
-      RecordReader[Container[JEntityId], Container[KijiRowData]]
-      ]
-    ) {
+      flow: FlowProcess[JobConf],
+      sourceCall: SourceCall[
+          KijiSourceContext,
+          RecordReader[Container[JEntityId], Container[KijiRowData]]]) {
     sourceCall.setContext(null)
   }
 
@@ -111,14 +106,12 @@ trait BaseKijiScheme extends Scheme[
    * @param conf to which we will add our KijiDataRequest.
    */
   override def sinkConfInit(
-    flow: FlowProcess[JobConf],
-    tap: Tap[
-      JobConf,
-      RecordReader[Container[JEntityId], Container[KijiRowData]],
-      OutputCollector[_, _]
-      ],
-    conf: JobConf
-    ) {
+      flow: FlowProcess[JobConf],
+      tap: Tap[
+          JobConf,
+          RecordReader[Container[JEntityId], Container[KijiRowData]],
+          OutputCollector[_, _]],
+      conf: JobConf) {
     // No-op since no configuration parameters need to be set to encode data for Kiji.
   }
 
@@ -129,8 +122,8 @@ trait BaseKijiScheme extends Scheme[
    * @param sinkCall containing the context for this source.
    */
   override def sinkCleanup(
-    flow: FlowProcess[JobConf],
-    sinkCall: SinkCall[DirectKijiSinkContext, OutputCollector[_, _]]) {
+      flow: FlowProcess[JobConf],
+      sinkCall: SinkCall[DirectKijiSinkContext, OutputCollector[_, _]]) {
     val writer = sinkCall.getContext.writer
     writer.flush()
     writer.close()
@@ -147,10 +140,10 @@ trait BaseKijiScheme extends Scheme[
    * @param rowFilterSpec specifies the filters for the request.
    */
   def configureRequest(
-    uri: KijiURI,
-    conf: JobConf,
-    rowRangeSpec: RowRangeSpec,
-    rowFilterSpec: RowFilterSpec
+      uri: KijiURI,
+      conf: JobConf,
+      rowRangeSpec: RowRangeSpec,
+      rowFilterSpec: RowFilterSpec
     ) {
     val eidFactory = withKijiTable(uri, conf) { table =>
       EntityIdFactory.getFactory(table.getLayout)
@@ -159,18 +152,18 @@ trait BaseKijiScheme extends Scheme[
     rowRangeSpec.startEntityId match {
       case Some(entityId) =>
         conf.set(
-          KijiConfKeys.KIJI_START_ROW_KEY,
-          Base64.encodeBase64String(
-            entityId.toJavaEntityId(eidFactory).getHBaseRowKey))
+            KijiConfKeys.KIJI_START_ROW_KEY,
+            Base64.encodeBase64String(
+                entityId.toJavaEntityId(eidFactory).getHBaseRowKey))
       case None => //Do Nothing
     }
     // Set limit entity id.
     rowRangeSpec.limitEntityId match {
       case Some(entityId) =>
         conf.set(
-          KijiConfKeys.KIJI_LIMIT_ROW_KEY,
-          Base64.encodeBase64String(
-            entityId.toJavaEntityId(eidFactory).getHBaseRowKey))
+            KijiConfKeys.KIJI_LIMIT_ROW_KEY,
+            Base64.encodeBase64String(
+                entityId.toJavaEntityId(eidFactory).getHBaseRowKey))
       case None => //Do Nothing
     }
     // Set row filter.
@@ -200,18 +193,19 @@ object BaseKijiScheme {
    * @return data request configured with timeRange and columns.
    */
   private[express] def buildRequest(
-    layout: KijiTableLayout,
-    timeRange: TimeRangeSpec,
-    columns: Iterable[ColumnInputSpec]
-    ): KijiDataRequest = {
+      layout: KijiTableLayout,
+      timeRange: TimeRangeSpec,
+      columns: Iterable[ColumnInputSpec]
+      ): KijiDataRequest = {
+
     def addColumn(
-      builder: KijiDataRequestBuilder,
-      column: ColumnInputSpec
-      ): KijiDataRequestBuilder.ColumnsDef = {
+        builder: KijiDataRequestBuilder,
+        column: ColumnInputSpec
+        ): KijiDataRequestBuilder.ColumnsDef = {
       val kijiFilter: KijiColumnFilter = column
-        .filterSpec
-        .toKijiColumnFilter
-        .getOrElse(null)
+          .filterSpec
+          .toKijiColumnFilter
+          .getOrElse(null)
       val columnReaderSpec: ColumnReaderSpec = {
         // Check and ensure that this column isn't a counter, protobuf, or raw bytes encoded column.
         // If it is, ignore the provided schema spec.
@@ -221,29 +215,29 @@ object BaseKijiScheme {
             // then get the schema type from the map-type column family instead. Otherwise get it
             // from the qualified column as usual.
             val columnFamily = layout
-              .getFamilyMap
-              .get(column.columnName.getFamily)
+                .getFamilyMap
+                .get(column.columnName.getFamily)
             if (columnFamily.isMapType) {
               columnFamily
-                .getDesc
-                .getMapSchema
-                .getType
+                  .getDesc
+                  .getMapSchema
+                  .getType
             } else {
               columnFamily
-                .getColumnMap
-                .get(column.columnName.getQualifier)
-                .getDesc
-                .getColumnSchema
-                .getType
+                  .getColumnMap
+                  .get(column.columnName.getQualifier)
+                  .getDesc
+                  .getColumnSchema
+                  .getType
             }
           }
           case ColumnFamilyInputSpec(family, _, _, _, _) => {
             layout
-              .getFamilyMap
-              .get(column.columnName.getFamily)
-              .getDesc
-              .getMapSchema
-              .getType
+                .getFamilyMap
+                .get(column.columnName.getFamily)
+                .getDesc
+                .getMapSchema
+                .getType
           }
         }
         schemaType match {
@@ -259,14 +253,14 @@ object BaseKijiScheme {
         }
       }
       builder.newColumnsDef()
-        .withMaxVersions(column.maxVersions)
-        .withFilter(kijiFilter)
-        .withPageSize(column.pagingSpec.cellsPerPage.getOrElse(0))
-        .add(column.columnName, columnReaderSpec)
+          .withMaxVersions(column.maxVersions)
+          .withFilter(kijiFilter)
+          .withPageSize(column.pagingSpec.cellsPerPage.getOrElse(0))
+          .add(column.columnName, columnReaderSpec)
     }
 
     val requestBuilder: KijiDataRequestBuilder = KijiDataRequest.builder()
-      .withTimeRange(timeRange.begin, timeRange.end)
+        .withTimeRange(timeRange.begin, timeRange.end)
 
     columns.foreach(column => addColumn(requestBuilder, column))
     requestBuilder.build()
@@ -291,5 +285,5 @@ private[express] final case class KijiSourceContext(rowContainer: Container[Kiji
 @ApiAudience.Private
 @ApiStability.Stable
 private[express] final case class DirectKijiSinkContext(
-  eidFactory: EntityIdFactory,
-  writer: KijiBufferedWriter)
+    eidFactory: EntityIdFactory,
+    writer: KijiBufferedWriter)

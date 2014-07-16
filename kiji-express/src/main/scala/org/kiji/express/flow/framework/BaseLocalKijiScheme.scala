@@ -62,7 +62,7 @@ import org.kiji.schema.KijiDataRequest.Column
  * contained to a single JVM.
  */
 trait BaseLocalKijiScheme
-  extends Scheme[Properties, InputStream, OutputStream, InputContext, DirectKijiSinkContext] {
+    extends Scheme[Properties, InputStream, OutputStream, InputContext, DirectKijiSinkContext] {
 
   /**
    * Sets any configuration options that are required for running a local job
@@ -73,9 +73,9 @@ trait BaseLocalKijiScheme
    * @param conf is an unused Properties object that is a stand-in for a job configuration object.
    */
   override def sourceConfInit(
-    process: FlowProcess[Properties],
-    tap: Tap[Properties, InputStream, OutputStream],
-    conf: Properties) {
+      process: FlowProcess[Properties],
+      tap: Tap[Properties, InputStream, OutputStream],
+      conf: Properties) {
     // No-op. Setting options in a java Properties object is not going to help us read from
     // a Kiji table.
   }
@@ -91,8 +91,8 @@ trait BaseLocalKijiScheme
    * @param sourceCall Object containing the context for this source.
    */
   override def sourceCleanup(
-    process: FlowProcess[Properties],
-    sourceCall: SourceCall[InputContext, InputStream]) {
+      process: FlowProcess[Properties],
+      sourceCall: SourceCall[InputContext, InputStream]) {
     // Set the context to null so that we no longer hold any references to it.
     sourceCall.setContext(null)
   }
@@ -106,9 +106,9 @@ trait BaseLocalKijiScheme
    * @param conf The job configuration object.
    */
   override def sinkConfInit(
-    process: FlowProcess[Properties],
-    tap: Tap[Properties, InputStream, OutputStream],
-    conf: Properties) {
+      process: FlowProcess[Properties],
+      tap: Tap[Properties, InputStream, OutputStream],
+      conf: Properties) {
     // No-op. Setting options in a java Properties object is not going to help us write to
     // a Kiji table.
   }
@@ -120,8 +120,8 @@ trait BaseLocalKijiScheme
    * @param sinkCall Object containing the context for this source.
    */
   override def sinkCleanup(
-    process: FlowProcess[Properties],
-    sinkCall: SinkCall[DirectKijiSinkContext, OutputStream]) {
+      process: FlowProcess[Properties],
+      sinkCall: SinkCall[DirectKijiSinkContext, OutputStream]) {
     val writer = sinkCall.getContext.writer
     writer.flush()
     writer.close()
@@ -142,13 +142,13 @@ object BaseLocalKijiScheme {
    */
   def openReaderWithOverrides(table: KijiTable, request: KijiDataRequest): KijiTableReader = {
     val overrides: Map[KijiColumnName, ColumnReaderSpec] = request
-      .getColumns
-      .asScala
-      .map { column: Column => (column.getColumnName, column.getReaderSpec)}
-      .toMap
+        .getColumns
+        .asScala
+        .map { column: Column => (column.getColumnName, column.getReaderSpec)}
+        .toMap
     table.getReaderFactory.readerBuilder()
-      .withColumnReaderSpecOverrides(overrides.asJava)
-      .buildAndOpen()
+        .withColumnReaderSpecOverrides(overrides.asJava)
+        .buildAndOpen()
   }
 }
 
@@ -164,9 +164,8 @@ object BaseLocalKijiScheme {
 @ApiAudience.Private
 @ApiStability.Stable
 final private[express] case class InputContext(
-  reader: KijiTableReader,
-  scanner: KijiRowScanner,
-  iterator: Iterator[KijiRowData],
-  tableUri: KijiURI,
-  configuration: Configuration
-  )
+    reader: KijiTableReader,
+    scanner: KijiRowScanner,
+    iterator: Iterator[KijiRowData],
+    tableUri: KijiURI,
+    configuration: Configuration)

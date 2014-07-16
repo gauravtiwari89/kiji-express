@@ -75,14 +75,14 @@ import org.kiji.express.flow.framework.TypedLocalKijiScheme
  * @param tset is the tuple setter definition passed in implicitly.
  * @tparam T is the type of value from the source.
  */
-sealed class TypedKijiSource[-T](
-  val tableAddress: String,
-  val timeRange: TimeRangeSpec,
-  val inputColumns: List[ColumnInputSpec] = List(),
-  val rowRangeSpec: RowRangeSpec = RowRangeSpec.All,
-  val rowFilterSpec: RowFilterSpec = RowFilterSpec.NoFilter
-  )(implicit conv: TupleConverter[ExpressResult], tset: TupleSetter[T])
-  extends Mappable[ExpressResult] with TypedSink[T] {
+final class TypedKijiSource[-T](
+    val tableAddress: String,
+    val timeRange: TimeRangeSpec,
+    val inputColumns: List[ColumnInputSpec] = List(),
+    val rowRangeSpec: RowRangeSpec = RowRangeSpec.All,
+    val rowFilterSpec: RowFilterSpec = RowFilterSpec.NoFilter
+    )(implicit conv: TupleConverter[ExpressResult], tset: TupleSetter[T])
+    extends Mappable[ExpressResult] with TypedSink[T] {
 
   /**
    * Default implementation of a converter method that returns a [[TupleConverter]] for the super
@@ -92,7 +92,7 @@ sealed class TypedKijiSource[-T](
     * @return the [[TupleConverter]] object with the new type.
     */
   override def converter[U >: ExpressResult]: TupleConverter[U] =
-    TupleConverter.asSuperConverter[ExpressResult, U](conv)
+      TupleConverter.asSuperConverter[ExpressResult, U](conv)
 
   /**
    * Default implementation of a converter method that returns a [[TupleSetter]] for the subtype of
@@ -107,22 +107,21 @@ sealed class TypedKijiSource[-T](
 
   /** A Typed Kiji scheme intended to be used with Scalding/Cascading's hdfs mode. */
   val typedKijiScheme: TypedKijiScheme =
-    new TypedKijiScheme(
-      tableAddress,
-      timeRange,
-      inputColumns,
-      rowRangeSpec,
-      rowFilterSpec)
+      new TypedKijiScheme(
+          tableAddress,
+          timeRange,
+          inputColumns,
+          rowRangeSpec,
+          rowFilterSpec)
 
   /** A Typed Local Kiji scheme intended to be used with Scalding/Cascading's local mode. */
   val typedLocalKijiScheme: TypedLocalKijiScheme =
-    new TypedLocalKijiScheme(
-      uri,
-      timeRange,
-      inputColumns,
-      rowRangeSpec,
-      rowFilterSpec
-    )
+      new TypedLocalKijiScheme(
+          uri,
+          timeRange,
+          inputColumns,
+          rowRangeSpec,
+          rowFilterSpec)
 
   /**
    * Create a connection to the physical data source (also known as a Tap in Cascading)
@@ -143,29 +142,29 @@ sealed class TypedKijiSource[-T](
 
   override def toString: String =
     Objects
-      .toStringHelper(this)
-      .add("tableAddress", tableAddress)
-      .add("timeRangeSpec", timeRange)
-      .add("inputColumns", inputColumns)
-      .add("rowRangeSpec", rowRangeSpec)
-      .add("rowFilterSpec", rowFilterSpec)
-      .toString
+        .toStringHelper(this)
+        .add("tableAddress", tableAddress)
+        .add("timeRangeSpec", timeRange)
+        .add("inputColumns", inputColumns)
+        .add("rowRangeSpec", rowRangeSpec)
+        .add("rowFilterSpec", rowFilterSpec)
+        .toString
 
   override def equals(obj: Any): Boolean = obj match {
     case other: TypedKijiSource[T] => (
       tableAddress == other.tableAddress
-        && inputColumns == other.inputColumns
-        && timeRange == other.timeRange
-        && rowRangeSpec == other.rowRangeSpec
-        && rowFilterSpec == other.rowFilterSpec)
+          && inputColumns == other.inputColumns
+          && timeRange == other.timeRange
+          && rowRangeSpec == other.rowRangeSpec
+          && rowFilterSpec == other.rowFilterSpec)
     case _ => false
   }
 
   override def hashCode(): Int =
     Objects.hashCode(
-      tableAddress,
-      inputColumns,
-      timeRange,
-      rowRangeSpec,
-      rowFilterSpec)
+        tableAddress,
+        inputColumns,
+        timeRange,
+        rowRangeSpec,
+        rowFilterSpec)
 }

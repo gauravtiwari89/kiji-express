@@ -37,12 +37,16 @@ class TestTypedReadWriteFlow extends KijiSuite{
     val tableLayout: KijiTableLayout = ResourceUtil.layout(KijiTableLayouts.SIMPLE_TWO_COLUMNS)
     val kijiTable: KijiTable = makeTestKijiTable(tableLayout)
 
-    def validateWritesToTable(row:String,family:String, columns:List[String], table:KijiTable):Boolean = {
+    def validateWritesToTable(
+        row:String,
+        family:String,
+        columns:List[String],
+        table:KijiTable
+    ):Boolean = {
       ResourceUtil.doAndClose(table.openTableReader()) { reader =>
         val rowData: KijiRowData = reader.get(
-          table.getEntityId(row),
-          KijiDataRequest.create(family)
-        )
+            table.getEntityId(row),
+            KijiDataRequest.create(family))
         columns.foreach {
           qualifier: String =>
             //Assert non-empty for cells read from the table.
@@ -56,49 +60,47 @@ class TestTypedReadWriteFlow extends KijiSuite{
       kiji =>
         ResourceUtil.doAndRelease(kiji.openTable(tableLayout.getName)) { table =>
           new InstanceBuilder(kiji)
-            .withTable(table)
-            .withRow("row1")
-              .withFamily("family")
-                .withQualifier("column1").withValue("v1")
-                .withQualifier("column2").withValue("v2")
+              .withTable(table)
+              .withRow("row1")
+                .withFamily("family")
+                  .withQualifier("column1").withValue("v1")
+                  .withQualifier("column2").withValue("v2")
           .build()
 
           class SimpleReadWriteJob(args:Args) extends KijiJob(args){
             KijiInput.typedBuilder
-              .withTableURI(table.getURI.toString)
-              .withColumnSpecs(
-                  List(
-                    QualifiedColumnInputSpec
-                      .builder
-                      .withColumn("family", "column1")
-                      .build,
-                    QualifiedColumnInputSpec
-                      .builder
-                      .withColumn("family", "column2")
-                      .build
-                     )
+                .withTableURI(table.getURI.toString)
+                .withColumnSpecs(
+                    List(
+                        QualifiedColumnInputSpec
+                          .builder
+                          .withColumn("family", "column1")
+                          .build,
+                        QualifiedColumnInputSpec
+                          .builder
+                          .withColumn("family", "column2")
+                          .build)
               ).build
             .map{ row:ExpressResult =>
               val mostRecent1=  row.mostRecentCell[Utf8]("family", "column1")
               val col1 = ExpressColumnOutput(
-                  EntityId("row2"),
-                  "family",
-                  "column1",
-                  mostRecent1.datum.toString,
-                  timeStamp=Some(mostRecent1.version)
-                )
+                    EntityId("row2"),
+                    "family",
+                    "column1",
+                    mostRecent1.datum.toString,
+                    timeStamp=Some(mostRecent1.version))
               val mostRecent2=  row.mostRecentCell[Utf8]("family", "column2")
               val col2 = ExpressColumnOutput(
-                  EntityId("row2"),
-                  "family",
-                  "column2",
-                  mostRecent2.datum.toString,
-                  timeStamp=Some(mostRecent2.version)
-                )
+                    EntityId("row2"),
+                    "family",
+                    "column2",
+                    mostRecent2.datum.toString,
+                    timeStamp=Some(mostRecent2.version))
               (col1, col2)
-            }.debug
-            .write(KijiOutput.typedBuilder.withTableURI(table.getURI).build)
+            }
+            .write(KijiOutput.typedSinkForTable(table.getURI))
           }
+
           val args = Mode.putMode(Local(strictSources = true), Args(List()))
           Assert.assertTrue(new SimpleReadWriteJob(args).run)
           //Validate Writes.

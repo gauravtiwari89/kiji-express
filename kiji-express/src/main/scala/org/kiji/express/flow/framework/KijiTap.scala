@@ -45,7 +45,9 @@ import org.slf4j.LoggerFactory
 
 import org.kiji.annotations.ApiAudience
 import org.kiji.annotations.ApiStability
-import org.kiji.express.flow._
+import org.kiji.express.flow.ColumnInputSpec
+import org.kiji.express.flow.ColumnOutputSpec
+import org.kiji.express.flow.InvalidKijiTapException
 import org.kiji.express.flow.util.ResourceUtil.doAndRelease
 import org.kiji.mapreduce.framework.KijiConfKeys
 import org.kiji.mapreduce.framework.KijiTableInputFormat
@@ -285,17 +287,17 @@ final class KijiTap(
     val kijiUri: KijiURI = KijiURI.newBuilder(tableUri).build()
     scheme match {
       case kijiScheme: KijiScheme =>  KijiTap.validate (
-        kijiUri,
-        kijiScheme.inputColumns.values.toList,
-        kijiScheme.outputColumns.values.toList,
-        conf
+          kijiUri,
+          kijiScheme.inputColumns.values.toList,
+          kijiScheme.outputColumns.values.toList,
+          conf
       )
       case kijiTypedScheme: TypedKijiScheme => KijiTap.validate(
-        kijiUri,
-        kijiTypedScheme.inputColumns,
-        //KijiTypedSource takes no output column params.
-        Seq(),
-        conf
+          kijiUri,
+          kijiTypedScheme.inputColumns,
+          //KijiTypedSource takes no output column params.
+          Seq(),
+          conf
       )
     }
   }

@@ -107,12 +107,12 @@ object KijiInput {
   @ApiAudience.Public
   @ApiStability.Stable
   final class Builder private(
-    private[this] var mTableURI: Option[String],
-    private[this] var mTimeRange: Option[TimeRangeSpec],
-    private[this] var mColumnSpecs: Option[Map[_ <: ColumnInputSpec, Symbol]],
-    private[this] var mRowRangeSpec: Option[RowRangeSpec],
-    private[this] var mRowFilterSpec: Option[RowFilterSpec]
-    ) {
+      private[this] var mTableURI: Option[String],
+      private[this] var mTimeRange: Option[TimeRangeSpec],
+      private[this] var mColumnSpecs: Option[Map[_ <: ColumnInputSpec, Symbol]],
+      private[this] var mRowRangeSpec: Option[RowRangeSpec],
+      private[this] var mRowFilterSpec: Option[RowFilterSpec]
+  ) {
     /** protects read and write access to private var fields. */
     private val monitor = new AnyRef
 
@@ -202,7 +202,7 @@ object KijiInput {
      * @return this builder.
      */
     def withColumns(columns: Map[String, Symbol]): Builder =
-      withColumnSpecs(columns.map { Builder.columnToSpec })
+        withColumnSpecs(columns.map { Builder.columnToSpec })
 
     /**
      * Configure the KijiSource to read values from the given columns into the corresponding fields.
@@ -221,7 +221,7 @@ object KijiInput {
      * @return this builder.
      */
     def addColumns(columns: Map[String, Symbol]): Builder =
-      addColumnSpecs(columns.map { Builder.columnToSpec })
+        addColumnSpecs(columns.map { Builder.columnToSpec })
 
     /**
      * Configure the KijiSource to read values from the given columns into the corresponding fields.
@@ -231,7 +231,7 @@ object KijiInput {
      * @return this builder.
      */
     def withColumnSpecs(columnSpecs: (_ <: ColumnInputSpec, Symbol)*): Builder =
-      withColumnSpecs(columnSpecs.toMap[ColumnInputSpec, Symbol])
+        withColumnSpecs(columnSpecs.toMap[ColumnInputSpec, Symbol])
 
     /**
      * Configure the KijiSource to read values from the given columns into the corresponding fields.
@@ -241,7 +241,7 @@ object KijiInput {
      * @return this builder.
      */
     def addColumnSpecs(columnSpecs: (_ <: ColumnInputSpec, Symbol)*): Builder =
-      addColumnSpecs(columnSpecs.toMap[ColumnInputSpec, Symbol])
+        addColumnSpecs(columnSpecs.toMap[ColumnInputSpec, Symbol])
 
     /**
      * Configure the KijiSource to read values from the given columns into the corresponding fields.
@@ -281,7 +281,7 @@ object KijiInput {
               symbols.contains(field)
             }
             require(!duplicateField, ("Column input specs already set to: %s May not add duplicate "
-              + "Fields.").format(mColumnSpecs.get))
+                + "Fields.").format(mColumnSpecs.get))
             mColumnSpecs = Some(cs ++ columnSpecs)
           }
           case None => mColumnSpecs = Some(columnSpecs)
@@ -324,12 +324,12 @@ object KijiInput {
      */
     def build: KijiSource = monitor.synchronized {
       KijiInput(
-        tableURI.getOrElse(throw new IllegalStateException("Table URI must be specified.")),
-        timeRange.getOrElse(DEFAULT_TIME_RANGE),
-        columnSpecs.getOrElse(
-          throw new IllegalStateException("Column input specs must be specified.")),
-        rowRangeSpec.getOrElse(RowRangeSpec.All),
-        rowFilterSpec.getOrElse(RowFilterSpec.NoFilter))
+          tableURI.getOrElse(throw new IllegalStateException("Table URI must be specified.")),
+          timeRange.getOrElse(DEFAULT_TIME_RANGE),
+          columnSpecs.getOrElse(
+            throw new IllegalStateException("Column input specs must be specified.")),
+          rowRangeSpec.getOrElse(RowRangeSpec.All),
+          rowFilterSpec.getOrElse(RowFilterSpec.NoFilter))
     }
   }
 
@@ -442,7 +442,7 @@ object KijiInput {
      * @return this TypedBuilder.
      */
     def withColumns(columns: List[String]): TypedBuilder =
-      withColumnSpecs(columns.map { TypedBuilder.columnToSpec })
+        withColumnSpecs(columns.map { TypedBuilder.columnToSpec })
 
     /**
      * Configure the [[TypedKijiSource]] to read values from the given columns into the
@@ -463,7 +463,7 @@ object KijiInput {
      * @return this TypedBuilder.
      */
     def addColumns(columns: List[String]): TypedBuilder =
-      addColumnSpecs(columns.map { TypedBuilder.columnToSpec })
+        addColumnSpecs(columns.map { TypedBuilder.columnToSpec })
 
     /**
      * Configure the [[TypedKijiSource]] to read values from the given columns into the
@@ -474,7 +474,7 @@ object KijiInput {
      * @return this TypedBuilder.
      */
     def withColumnSpecs(columnSpecs: (ColumnInputSpec)*): TypedBuilder =
-      withColumnSpecs(columnSpecs.toList)
+        withColumnSpecs(columnSpecs.toList)
 
     /**
      * Configure the [[TypedKijiSource]] to read values from the given columns into the
@@ -485,7 +485,7 @@ object KijiInput {
      * @return this TypedBuilder.
      */
     def addColumnSpecs(columnSpecs: (ColumnInputSpec)*): TypedBuilder =
-      addColumnSpecs(columnSpecs.toList)
+        addColumnSpecs(columnSpecs.toList)
 
     /**
      * Configure the [[TypedKijiSource]] to read values from the given columns into the
@@ -599,11 +599,11 @@ object KijiInput {
     def apply(other: Builder): Builder = other.monitor.synchronized {
       // synchronize to get consistent snapshot of other
       new Builder(
-        other.tableURI,
-        other.timeRange,
-        other.columnSpecs,
-        other.rowRangeSpec,
-        other.rowFilterSpec)
+          other.tableURI,
+          other.timeRange,
+          other.columnSpecs,
+          other.rowRangeSpec,
+          other.rowFilterSpec)
     }
 
     /**
@@ -645,11 +645,11 @@ object KijiInput {
     def apply(other: TypedBuilder): TypedBuilder = other.monitor.synchronized {
       // synchronize to get consistent snapshot of other
       new TypedBuilder(
-        other.tableURI,
-        other.timeRange,
-        other.columnSpecs,
-        other.rowRangeSpec,
-        other.rowFilterSpec)
+          other.tableURI,
+          other.timeRange,
+          other.columnSpecs,
+          other.rowRangeSpec,
+          other.rowFilterSpec)
     }
 
     /**
@@ -683,19 +683,19 @@ object KijiInput {
    *     data from the requested columns and map-type column families.
    */
   private[express] def apply(
-    tableUri: String,
-    timeRange: TimeRangeSpec,
-    columns: Map[_ <: ColumnInputSpec, Symbol],
-    rowRangeSpec: RowRangeSpec,
-    rowFilterSpec: RowFilterSpec
-    ): KijiSource = {
+      tableUri: String,
+      timeRange: TimeRangeSpec,
+      columns: Map[_ <: ColumnInputSpec, Symbol],
+      rowRangeSpec: RowRangeSpec,
+      rowFilterSpec: RowFilterSpec
+  ): KijiSource = {
     new KijiSource(
-      tableUri,
-      timeRange,
-      None,
-      inputColumns = columns.map { entry: (ColumnInputSpec, Symbol) => entry.swap },
-      rowRangeSpec = rowRangeSpec,
-      rowFilterSpec = rowFilterSpec
+        tableUri,
+        timeRange,
+        None,
+        inputColumns = columns.map { entry: (ColumnInputSpec, Symbol) => entry.swap },
+        rowRangeSpec = rowRangeSpec,
+        rowFilterSpec = rowFilterSpec
     )
   }
 
@@ -709,22 +709,21 @@ object KijiInput {
    * @param rowRangeSpec the specification for which row interval to scan
    * @param rowFilterSpec the specification for which filter to apply.
    * @return a typed source for data in the Kiji table, whose row tuples will contain fields with
-   *         cell data from the requested columns and map-type column families.
+   *     cell data from the requested columns and map-type column families.
    */
   private[express] def typedKijiSource(
-    tableUri: String,
-    timeRange: TimeRangeSpec,
-    columns: List[_ <: ColumnInputSpec],
-    rowRangeSpec: RowRangeSpec,
-    rowFilterSpec: RowFilterSpec
-    ): TypedKijiSource[ExpressResult] = {
+      tableUri: String,
+      timeRange: TimeRangeSpec,
+      columns: List[_ <: ColumnInputSpec],
+      rowRangeSpec: RowRangeSpec,
+      rowFilterSpec: RowFilterSpec
+  ): TypedKijiSource[ExpressResult] = {
     new TypedKijiSource[ExpressResult](
-      tableUri,
-      timeRange,
-      columns ,
-      rowRangeSpec = rowRangeSpec,
-      rowFilterSpec = rowFilterSpec
+        tableUri,
+        timeRange,
+        columns ,
+        rowRangeSpec = rowRangeSpec,
+        rowFilterSpec = rowFilterSpec
     )
   }
-
 }

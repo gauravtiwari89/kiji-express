@@ -182,51 +182,37 @@ private[express] case class TypedLocalKijiScheme(
     process: FlowProcess[Properties],
     sinkCall: SinkCall[DirectKijiSinkContext, OutputStream]) {
     val DirectKijiSinkContext(eidFactory, writer) = sinkCall.getContext
+
+    def writeSingleVal(singleVal:ExpressColumnOutput[_]) :Unit= {
+      singleVal.timeStamp match {
+        case Some(timestamp) =>
+          writer.put(
+            singleVal.entityId.toJavaEntityId (eidFactory),
+            singleVal.family,
+            singleVal.qualifier,
+            timestamp,
+            singleVal.encode (singleVal.datum)
+          )
+        case None =>
+          writer.put(
+            singleVal.entityId.toJavaEntityId (eidFactory),
+            singleVal.family,
+            singleVal.qualifier,
+            singleVal.encode (singleVal.datum)
+          )
+      }
+    }
     //The first object in tuple entry contains the data in the pipe.
     val typedPipeVal: Product = sinkCall.getOutgoingEntry.getObject(0).asInstanceOf[Product]
     typedPipeVal match {
       //Value being written to a single column.
-      case singleVal: ExpressColumnOutput[_] =>
-        singleVal.timeStamp match {
-          case Some(timestamp) =>
-            //Timestamp specified.
-            writer.put(
-              singleVal.entityId.toJavaEntityId (eidFactory),
-              singleVal.family,
-              singleVal.qualifier,
-              timestamp,
-              singleVal.encode (singleVal.datum)
-            )
-          case None =>
-            //Timestamp not specified.
-            writer.put(
-              singleVal.entityId.toJavaEntityId (eidFactory),
-              singleVal.family,
-              singleVal.qualifier,
-              singleVal.encode (singleVal.datum)
-            )
-        }
+      case singleVal: ExpressColumnOutput[_] => writeSingleVal(singleVal)
+
       //Value being written to multiple columns.
       case nValTuple: Product =>
         nValTuple.productIterator.toList.foreach { anyVal =>
           val singleVal = anyVal.asInstanceOf[ExpressColumnOutput[_]]
-          singleVal.timeStamp match {
-            case Some(timestamp) =>
-              writer.put(
-                singleVal.entityId.toJavaEntityId (eidFactory),
-                singleVal.family,
-                singleVal.qualifier,
-                timestamp,
-                singleVal.encode (singleVal.datum)
-              )
-            case None =>
-              writer.put(
-                singleVal.entityId.toJavaEntityId (eidFactory),
-                singleVal.family,
-                singleVal.qualifier,
-                singleVal.encode (singleVal.datum)
-              )
-          }
+          writeSingleVal(singleVal)
         }
     }
   }

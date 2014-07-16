@@ -8,7 +8,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,7 +23,9 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.Properties
 
+import scala.Some
 import scala.collection.JavaConverters.asScalaIteratorConverter
+
 import cascading.flow.FlowProcess
 import cascading.flow.hadoop.util.HadoopUtil
 import cascading.scheme.SinkCall
@@ -37,16 +39,21 @@ import org.apache.hadoop.mapred.JobConf
 import org.kiji.annotations.ApiAudience
 import org.kiji.annotations.ApiStability
 import org.kiji.annotations.Inheritance
-import org.kiji.express.flow._
-import org.kiji.express.flow.util.ResourceUtil._
+import org.kiji.express.flow.ColumnFamilyOutputSpec
+import org.kiji.express.flow.ColumnInputSpec
+import org.kiji.express.flow.ColumnOutputSpec
+import org.kiji.express.flow.EntityId
+import org.kiji.express.flow.QualifiedColumnOutputSpec
+import org.kiji.express.flow.RowFilterSpec
+import org.kiji.express.flow.RowRangeSpec
+import org.kiji.express.flow.TimeRangeSpec
 import org.kiji.schema.EntityIdFactory
 import org.kiji.schema.KijiRowData
 import org.kiji.schema.KijiTableReader.KijiScannerOptions
 import org.kiji.schema.KijiTable
 import org.kiji.schema.KijiURI
 import org.kiji.schema.{EntityId => JEntityId}
-import scala.Some
-
+import org.kiji.express.flow.util.ResourceUtil.withKijiTable
 
 /**
  * A local version of [[org.kiji.express.flow.framework.KijiScheme]] that is meant to be used with
@@ -76,25 +83,25 @@ import scala.Some
  * @param uri of table to be written to.
  * @param timeRange to include from the Kiji table.
  * @param timestampField is the optional name of a field containing the timestamp that all values
- *                       in a tuple should be written to.
- *                       Use None if all values should be written at the current time.
+ *     in a tuple should be written to.
+ *     Use None if all values should be written at the current time.
  * @param inputColumns is a one-to-one mapping from field names to Kiji columns. The columns in the
- *                     map will be read into their associated tuple fields.
+ *     map will be read into their associated tuple fields.
  * @param outputColumns is a one-to-one mapping from field names to Kiji columns. Values from the
- *                      tuple fields will be written to their associated column.
+ *     tuple fields will be written to their associated column.
  */
 @ApiAudience.Framework
 @ApiStability.Stable
 @Inheritance.Sealed
 private[express] case class LocalKijiScheme(
-  private[express] val uri: KijiURI,
-  private[express] val timeRange: TimeRangeSpec,
-  private[express] val timestampField: Option[Symbol],
-  private[express] val inputColumns: Map[String, ColumnInputSpec] = Map(),
-  private[express] val outputColumns: Map[String, ColumnOutputSpec] = Map(),
-  private[express] val rowRangeSpec: RowRangeSpec,
-  private[express] val rowFilterSpec: RowFilterSpec)
-  extends BaseLocalKijiScheme {
+    private[express] val uri: KijiURI,
+    private[express] val timeRange: TimeRangeSpec,
+    private[express] val timestampField: Option[Symbol],
+    private[express] val inputColumns: Map[String, ColumnInputSpec] = Map(),
+    private[express] val outputColumns: Map[String, ColumnOutputSpec] = Map(),
+    private[express] val rowRangeSpec: RowRangeSpec,
+    private[express] val rowFilterSpec: RowFilterSpec)
+    extends BaseLocalKijiScheme {
 
 
   /** Set the fields that should be in a tuple when this source is used for reading and writing. */
@@ -109,8 +116,8 @@ private[express] case class LocalKijiScheme(
    * @param sourceCall containing the context for this source.
    */
   override def sourcePrepare(
-    process: FlowProcess[Properties],
-    sourceCall: SourceCall[InputContext, InputStream]) {
+      process: FlowProcess[Properties],
+      sourceCall: SourceCall[InputContext, InputStream]) {
 
     val conf: JobConf =
       HadoopUtil.createJobConf(process.getConfigCopy, new JobConf(HBaseConfiguration.create()))
@@ -124,7 +131,7 @@ private[express] case class LocalKijiScheme(
       val eidFactory = EntityIdFactory.getFactory(table.getLayout())
       val scannerOptions = new KijiScannerOptions()
       scannerOptions.setKijiRowFilter(
-        rowFilterSpec.toKijiRowFilter.getOrElse(null))
+          rowFilterSpec.toKijiRowFilter.getOrElse(null))
       scannerOptions.setStartRow(
         rowRangeSpec.startEntityId match {
           case Some(entityId) => entityId.toJavaEntityId(eidFactory)
@@ -152,20 +159,20 @@ private[express] case class LocalKijiScheme(
    * @param process is the current Cascading flow being run.
    * @param sourceCall containing the context for this source.
    * @return <code>true</code> if another row was read and it was converted to a tuple,
-   *         <code>false</code> if there were no more rows to read.
+   *     <code>false</code> if there were no more rows to read.
    */
   override def source(
-    process: FlowProcess[Properties],
-    sourceCall: SourceCall[InputContext, InputStream]): Boolean = {
+      process: FlowProcess[Properties],
+      sourceCall: SourceCall[InputContext, InputStream]): Boolean = {
     val context: InputContext = sourceCall.getContext
     if (context.iterator.hasNext) {
       // Get the current row.
       val row: KijiRowData = context.iterator.next()
       val result: Tuple = KijiScheme.rowToTuple(
-        inputColumns,
-        getSourceFields,
-        timestampField,
-        row)
+          inputColumns,
+          getSourceFields,
+          timestampField,
+          row)
 
       // Set the result tuple and return from this method.
       sourceCall.getIncomingEntry.setTuple(result)
@@ -184,8 +191,8 @@ private[express] case class LocalKijiScheme(
    * @param sinkCall Object containing the context for this source.
    */
   override def sinkPrepare(
-    process: FlowProcess[Properties],
-    sinkCall: SinkCall[DirectKijiSinkContext, OutputStream]) {
+      process: FlowProcess[Properties],
+      sinkCall: SinkCall[DirectKijiSinkContext, OutputStream]) {
 
     val conf: JobConf =
       HadoopUtil.createJobConf(process.getConfigCopy, new JobConf(HBaseConfiguration.create()))
@@ -194,8 +201,8 @@ private[express] case class LocalKijiScheme(
       // Set the sink context to an opened KijiTableWriter.
       sinkCall.setContext(
         DirectKijiSinkContext(
-          EntityIdFactory.getFactory(table.getLayout),
-          table.getWriterFactory.openBufferedWriter()))
+            EntityIdFactory.getFactory(table.getLayout),
+            table.getWriterFactory.openBufferedWriter()))
     }
   }
 
@@ -206,21 +213,21 @@ private[express] case class LocalKijiScheme(
    * @param sinkCall Object containing the context for this source.
    */
   override def sink(
-    process: FlowProcess[Properties],
-    sinkCall: SinkCall[DirectKijiSinkContext, OutputStream]) {
+      process: FlowProcess[Properties],
+      sinkCall: SinkCall[DirectKijiSinkContext, OutputStream]) {
     val DirectKijiSinkContext(eidFactory, writer) = sinkCall.getContext
     val tuple: TupleEntry = sinkCall.getOutgoingEntry
 
     // Get the entityId.
     val eid: JEntityId = tuple
-      .getObject(KijiScheme.EntityIdField)
-      .asInstanceOf[EntityId]
-      .toJavaEntityId(eidFactory)
+        .getObject(KijiScheme.EntityIdField)
+        .asInstanceOf[EntityId]
+        .toJavaEntityId(eidFactory)
 
     // Get a timestamp to write the values to, if it was specified by the user.
     val version: Long = timestampField
-      .map(field => tuple.getLong(field.name))
-      .getOrElse(HConstants.LATEST_TIMESTAMP)
+        .map(field => tuple.getLong(field.name))
+        .getOrElse(HConstants.LATEST_TIMESTAMP)
 
     outputColumns.foreach { case (field, column) =>
       val value = tuple.getObject(field)

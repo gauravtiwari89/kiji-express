@@ -23,12 +23,15 @@ import cascading.flow.FlowDef
 import cascading.pipe.Pipe
 import com.twitter.scalding.Mode
 import com.twitter.scalding.RichPipe
+import com.twitter.scalding.typed.TypedPipe
 
 import org.kiji.annotations.ApiAudience
 import org.kiji.annotations.ApiStability
 import org.kiji.annotations.Inheritance
-import org.kiji.express.flow.{ExpressResult, TypedKijiSource, KijiPipe, KijiSource}
-import com.twitter.scalding.typed.TypedPipe
+import org.kiji.express.flow.ExpressResult
+import org.kiji.express.flow.KijiPipe
+import org.kiji.express.flow.KijiSource
+import org.kiji.express.flow.TypedKijiSource
 
 /**
  * PipeConversions contains implicit conversions necessary for KijiExpress that are not included in

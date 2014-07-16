@@ -72,15 +72,14 @@ import org.kiji.express.flow.util.ResourceUtil.withKijiTable
  * @param rowFilterSpec specifies the filters for the input.
  */
 class TypedKijiScheme(
-  private[express] val tableAddress: String,
-  private[express] val timeRange: TimeRangeSpec,
-  icolumns: List[ColumnInputSpec] = List(),
-  private[express] val rowRangeSpec: RowRangeSpec,
-  private[express] val rowFilterSpec: RowFilterSpec
-  ) extends BaseKijiScheme {
+    private[express] val tableAddress: String,
+    private[express] val timeRange: TimeRangeSpec,
+    icolumns: List[ColumnInputSpec] = List(),
+    private[express] val rowRangeSpec: RowRangeSpec,
+    private[express] val rowFilterSpec: RowFilterSpec
+) extends BaseKijiScheme {
   import TypedKijiScheme._
 
-  //TODO does the typed implementation require the KryoSerializer?
   private[this] val _inputColumns = KijiKryoExternalizer(icolumns)
 
   def inputColumns: List[ColumnInputSpec] = _inputColumns.get
@@ -95,13 +94,12 @@ class TypedKijiScheme(
    * @param conf to which we will add our KijiDataRequest.
    */
   override def sourceConfInit(
-    flow: FlowProcess[JobConf],
-    tap: Tap[
-      JobConf,
-      RecordReader[Container[JEntityId], Container[KijiRowData]],
-      OutputCollector[_, _]
-      ],
-    conf: JobConf): Unit = {
+      flow: FlowProcess[JobConf],
+      tap: Tap[
+          JobConf,
+          RecordReader[Container[JEntityId], Container[KijiRowData]],
+          OutputCollector[_, _]],
+      conf: JobConf): Unit = {
 
     // Build a data request.
     val request: KijiDataRequest = withKijiTable(uri, conf) { table =>
@@ -111,8 +109,8 @@ class TypedKijiScheme(
     configureRequest(uri, conf, rowRangeSpec, rowFilterSpec)
     // Set data request.
     conf.set(
-      KijiConfKeys.KIJI_INPUT_DATA_REQUEST,
-      Base64.encodeBase64String(SerializationUtils.serialize(request)))
+        KijiConfKeys.KIJI_INPUT_DATA_REQUEST,
+        Base64.encodeBase64String(SerializationUtils.serialize(request)))
   }
 
   /**
@@ -125,12 +123,11 @@ class TypedKijiScheme(
    *     `false` if there were no more rows to read.
    */
   override def source(
-    flow: FlowProcess[JobConf],
-    sourceCall: SourceCall[
-      KijiSourceContext,
-      RecordReader[Container[JEntityId], Container[KijiRowData]]
-      ]
-    ): Boolean = {
+      flow: FlowProcess[JobConf],
+      sourceCall: SourceCall[
+          KijiSourceContext,
+          RecordReader[Container[JEntityId], Container[KijiRowData]]]
+  ): Boolean = {
 
     // Get the current key/value pair.
     val rowContainer = sourceCall.getContext.rowContainer
@@ -156,9 +153,9 @@ class TypedKijiScheme(
   * @param sinkCall containing the context for this source.
   */
   override def sinkPrepare(
-    flow: FlowProcess[JobConf],
-    sinkCall: SinkCall[DirectKijiSinkContext, OutputCollector[_, _]]
-    ):Unit =  {
+      flow: FlowProcess[JobConf],
+      sinkCall: SinkCall[DirectKijiSinkContext, OutputCollector[_, _]]
+  ):Unit =  {
     withKijiTable(uri, flow.getConfigCopy) { table =>
       // Set the sink context to an opened KijiTableWriter.
       sinkCall.setContext(
@@ -175,54 +172,41 @@ class TypedKijiScheme(
    * @param sinkCall containing the context for this source.
    */
   override def sink(
-    flow: FlowProcess[JobConf],
-    sinkCall: SinkCall[DirectKijiSinkContext, OutputCollector[_, _]]
-    ): Unit = {
+      flow: FlowProcess[JobConf],
+      sinkCall: SinkCall[DirectKijiSinkContext, OutputCollector[_, _]]
+   ): Unit = {
     val DirectKijiSinkContext(eidFactory, writer) = sinkCall.getContext
-    //The first object in tuple entry contains the data in the pipe.
-    val typedPipeVal: Product = sinkCall.getOutgoingEntry.getObject(0).asInstanceOf[Product]
-    typedPipeVal match {
-      //Value being written to a single column.
-      case singleVal: ExpressColumnOutput[_] =>
-        singleVal.timeStamp match {
-          case Some(timestamp) =>
-            writer.put(
+
+    def writeSingleVal(singleVal:ExpressColumnOutput[_]) :Unit= {
+      singleVal.timeStamp match {
+        case Some(timestamp) =>
+          writer.put(
               singleVal.entityId.toJavaEntityId (eidFactory),
               singleVal.family,
               singleVal.qualifier,
               timestamp,
               singleVal.encode (singleVal.datum)
-            )
-          case None =>
-            writer.put(
+          )
+        case None =>
+          writer.put(
               singleVal.entityId.toJavaEntityId (eidFactory),
               singleVal.family,
               singleVal.qualifier,
               singleVal.encode (singleVal.datum)
-            )
-        }
+          )
+      }
+    }
+    //The first object in tuple entry contains the data in the pipe.
+    val typedPipeVal: Product = sinkCall.getOutgoingEntry.getObject(0).asInstanceOf[Product]
+    typedPipeVal match {
+      //Value being written to a single column.
+      case singleVal: ExpressColumnOutput[_] => writeSingleVal(singleVal)
 
       //Value being written to multiple columns.
       case nValTuple: Product =>
         nValTuple.productIterator.toList.foreach { anyVal =>
           val singleVal = anyVal.asInstanceOf[ExpressColumnOutput[_]]
-          singleVal.timeStamp match {
-            case Some(timestamp) =>
-              writer.put(
-                singleVal.entityId.toJavaEntityId (eidFactory),
-                singleVal.family,
-                singleVal.qualifier,
-                timestamp,
-                singleVal.encode (singleVal.datum)
-              )
-            case None =>
-              writer.put(
-                singleVal.entityId.toJavaEntityId (eidFactory),
-                singleVal.family,
-                singleVal.qualifier,
-                singleVal.encode (singleVal.datum)
-              )
-          }
+          writeSingleVal(singleVal)
         }
     }
   }
@@ -232,7 +216,6 @@ class TypedKijiScheme(
  * Companion object for [[TypedKijiScheme]] containing utility methods.
  */
 object TypedKijiScheme {
-
   /**
    * Converts a row of requested data from KijiTable to a cascading Tuple.
    *

@@ -41,7 +41,19 @@ import org.slf4j.LoggerFactory
 import org.kiji.annotations.ApiAudience
 import org.kiji.annotations.ApiStability
 import org.kiji.annotations.Inheritance
-import org.kiji.express.flow._
+import org.kiji.express.flow.ColumnFamilyInputSpec
+import org.kiji.express.flow.ColumnFamilyOutputSpec
+import org.kiji.express.flow.ColumnInputSpec
+import org.kiji.express.flow.ColumnOutputSpec
+import org.kiji.express.flow.EntityId
+import org.kiji.express.flow.FlowCell
+import org.kiji.express.flow.PagingSpec
+import org.kiji.express.flow.QualifiedColumnInputSpec
+import org.kiji.express.flow.QualifiedColumnOutputSpec
+import org.kiji.express.flow.RowFilterSpec
+import org.kiji.express.flow.RowRangeSpec
+import org.kiji.express.flow.TimeRangeSpec
+import org.kiji.express.flow.TransientStream
 import org.kiji.express.flow.framework.serialization.KijiKryoExternalizer
 import org.kiji.express.flow.util.AvroUtil
 import org.kiji.express.flow.util.ResourceUtil.withKijiTable
@@ -184,16 +196,16 @@ class KijiScheme(
    * @param sinkCall containing the context for this source.
    */
   override def sinkPrepare(
-    flow: FlowProcess[JobConf],
-    sinkCall: SinkCall[DirectKijiSinkContext, OutputCollector[_, _]]) {
+      flow: FlowProcess[JobConf],
+      sinkCall: SinkCall[DirectKijiSinkContext, OutputCollector[_, _]]) {
     val conf = flow.getConfigCopy
 
     withKijiTable(uri, conf) { table =>
       // Set the sink context to an opened KijiTableWriter.
       sinkCall.setContext(
         DirectKijiSinkContext(
-          EntityIdFactory.getFactory(table.getLayout),
-          table.getWriterFactory.openBufferedWriter()))
+            EntityIdFactory.getFactory(table.getLayout),
+            table.getWriterFactory.openBufferedWriter()))
     }
   }
 

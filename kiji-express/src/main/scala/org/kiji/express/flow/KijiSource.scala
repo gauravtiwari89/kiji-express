@@ -19,6 +19,7 @@
 
 package org.kiji.express.flow
 
+import scala.Some
 import scala.collection.JavaConverters.asScalaIteratorConverter
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.mutable.Buffer
@@ -35,22 +36,28 @@ import cascading.tuple.Tuple
 import cascading.tuple.TupleEntry
 import com.google.common.base.Objects
 import com.twitter.scalding.AccessMode
-import com.twitter.scalding.HadoopTest
 import com.twitter.scalding.Hdfs
+import com.twitter.scalding.HadoopTest
 import com.twitter.scalding.Local
 import com.twitter.scalding.Mode
 import com.twitter.scalding.Read
 import com.twitter.scalding.Source
 import com.twitter.scalding.Test
 import com.twitter.scalding.Write
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hbase.HBaseConfiguration
 import org.apache.hadoop.mapred.JobConf
 
 import org.kiji.annotations.ApiAudience
 import org.kiji.annotations.ApiStability
-import org.kiji.express.flow.framework._
-import org.kiji.express.flow.util.ResourceUtil._
+import org.kiji.express.flow.framework.BaseKijiScheme
+import org.kiji.express.flow.framework.BaseLocalKijiScheme
+import org.kiji.express.flow.framework.DirectKijiSinkContext
+import org.kiji.express.flow.framework.KijiScheme
+import org.kiji.express.flow.framework.KijiTap
+import org.kiji.express.flow.framework.LocalKijiScheme
+import org.kiji.express.flow.framework.LocalKijiTap
 import org.kiji.schema.EntityIdFactory
 import org.kiji.schema.Kiji
 import org.kiji.schema.KijiDataRequest
@@ -60,11 +67,10 @@ import org.kiji.schema.KijiTable
 import org.kiji.schema.KijiTableReader.KijiScannerOptions
 import org.kiji.schema.KijiTableWriter
 import org.kiji.schema.KijiURI
-import com.twitter.scalding.Test
-import scala.Some
-import com.twitter.scalding.HadoopTest
-import com.twitter.scalding.Hdfs
-import com.twitter.scalding.Local
+import org.kiji.express.flow.util.ResourceUtil.doAndClose
+import org.kiji.express.flow.util.ResourceUtil.doAndRelease
+import org.kiji.express.flow.util.ResourceUtil.withKijiTable
+import org.kiji.express.flow.util.ResourceUtil.withKijiTableWriter
 
 /**
  * A read or write view of a Kiji table.
